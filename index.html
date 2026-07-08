@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Unique 99 | Commander Deck Uniqueness Checker</title>
+  <link rel="icon" type="image/svg+xml" href="assets/u99-logo.svg" />
   <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Cdefs%3E%3ClinearGradient id="g" x1="0" y1="0" x2="1" y2="1"%3E%3Cstop stop-color="%2393c5fd"/%3E%3Cstop offset="1" stop-color="%233b82f6"/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width="100" height="100" rx="24" fill="url(%23g)"/%3E%3Ctext x="50" y="59" text-anchor="middle" font-size="30" font-family="Arial" font-weight="900" fill="%2303111f"%3EU99%3C/text%3E%3C/svg%3E' />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -12,7 +13,7 @@
   <main class="page">
     <header>
       <div class="brand">
-        <div class="logo">U99</div>
+        <div class="logo"><img src="assets/u99-logo.svg" alt="Unique 99 logo" /></div>
         <div class="brand-text">
           <strong>Unique 99</strong>
           <span>Commander Deck Uniqueness Score</span>
@@ -92,11 +93,11 @@ Example:
             <div class="commander-kicker">Commander</div>
             <div class="commander-title" id="commanderDetected">Not detected</div>
             <div class="color-pips" id="colorPips" aria-label="Commander color identity">
-              <img class="mana-symbol inactive" data-color="W" src="assets/mana-w.png" alt="White" title="White" />
-              <img class="mana-symbol inactive" data-color="U" src="assets/mana-u.png" alt="Blue" title="Blue" />
-              <img class="mana-symbol inactive" data-color="B" src="assets/mana-b.png" alt="Black" title="Black" />
-              <img class="mana-symbol inactive" data-color="R" src="assets/mana-r.png" alt="Red" title="Red" />
-              <img class="mana-symbol inactive" data-color="G" src="assets/mana-g.png" alt="Green" title="Green" />
+              <span class="mana-pip mana-W inactive" data-color="W" title="White">W</span>
+              <span class="mana-pip mana-U inactive" data-color="U" title="Blue">U</span>
+              <span class="mana-pip mana-B inactive" data-color="B" title="Black">B</span>
+              <span class="mana-pip mana-R inactive" data-color="R" title="Red">R</span>
+              <span class="mana-pip mana-G inactive" data-color="G" title="Green">G</span>
             </div>
           </div>
         </div>

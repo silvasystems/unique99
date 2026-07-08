@@ -53,3 +53,11 @@ Added:
 - U99 verdict line
 - readable score emphasis in reports
 - favicon
+
+
+## Logo + Mobile Fix Update
+
+Added:
+- `assets/u99-logo.svg`
+- CSS-only mana pips for reliable mobile display
+- consistent mobile background glow
