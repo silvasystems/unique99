@@ -11,21 +11,17 @@ unique99/
   index.html
   styles.css
   app.js
-  assets/
-    mana-w.png
-    mana-u.png
-    mana-b.png
-    mana-r.png
-    mana-g.png
+  README.md
+  .gitignore
 ```
 
-## Local Testing
+## Current Notes
 
-Open `index.html` in your browser.
+This cleanup build restores the simple U99 text logo and removes the need for mana image assets. Mana colors are now CSS pips, so there is no `assets` folder required for the current version.
 
 ## Deploying on Vercel
 
-This is still a static site.
+This is a static site.
 
 Recommended Vercel settings:
 
@@ -33,31 +29,3 @@ Recommended Vercel settings:
 - Build Command: leave empty
 - Output Directory: leave empty or `.`
 - Install Command: leave empty
-
-## Notes
-
-Scryfall lookups are still handled in the browser through `app.js`.
-
-Future upgrade path:
-- Add a backend/API route for Scryfall lookup
-- Cache card data
-- Improve commander art loading
-- Move to Next.js if needed
-
-
-## Quick Polish Update
-
-Added:
-- lookup progress bar
-- small confetti burst after analysis
-- U99 verdict line
-- readable score emphasis in reports
-- favicon
-
-
-## Logo + Mobile Fix Update
-
-Added:
-- `assets/u99-logo.svg`
-- CSS-only mana pips for reliable mobile display
-- consistent mobile background glow
