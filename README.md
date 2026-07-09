@@ -136,3 +136,19 @@ Updated:
 - Compare Mode is now three compact cards in one row on desktop.
 - Partner commander input was simplified to one optional box.
 - Unique Sleepers now scale from 76 to 100 instead of stopping at 95.
+
+
+## Compare Mode Cleanup
+
+Updated:
+- Removed the disabled "This Commander" card from Compare Mode.
+- Added a small coming soon note for same-commander comparison.
+- Cleaned up Compare Mode text.
+- Updated commander field helper copy.
+
+
+## Score Label Update
+
+Renamed:
+- Deck Uniqueness Score -> Adjusted Deck Score
+- Average card score -> Card Score Average

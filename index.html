@@ -15,7 +15,7 @@
         <div class="logo">U<span>99</span></div>
         <div class="brand-text">
           <strong>Unique 99</strong>
-          <span>Commander Deck Uniqueness Score</span>
+          <span>Commander Adjusted Deck Score</span>
         </div>
       </div>
     </header>
@@ -56,17 +56,20 @@
           </div>
         </div>
         <div class="app-body">
-
-
-
           <div class="compare-mode-card">
-            <div class="compare-mode-title">Compare Mode</div>
-            <div class="compare-options">
+            <div class="compare-mode-head">
+              <div>
+                <div class="compare-mode-title">Compare Mode</div>
+                <div class="compare-coming-soon">Coming soon: compare against decks using the same commander.</div>
+              </div>
+            </div>
+
+            <div class="compare-options compare-options-two">
               <label class="compare-option active">
                 <input type="radio" name="compareMode" value="global" checked />
                 <span>
                   <strong>All Commander Decks</strong>
-                  <em>Global EDHREC rank</em>
+                  <em>Uses global EDHREC rank</em>
                 </span>
               </label>
 
@@ -74,25 +77,15 @@
                 <input type="radio" name="compareMode" value="commanderAware" />
                 <span>
                   <strong>Commander-Aware</strong>
-                  <em>Experimental synergy adjustment</em>
-                </span>
-              </label>
-
-              <label class="compare-option disabled">
-                <input type="radio" name="compareMode" value="commanderSpecific" disabled />
-                <span>
-                  <strong>This Commander</strong>
-                  <em>Coming soon with better data</em>
+                  <em>Experimental theme adjustment</em>
                 </span>
               </label>
             </div>
           </div>
-
-          
-          <label for="commanderInput">Commander, optional</label>
+<label for="commanderInput">Commander, optional</label>
           <input id="commanderInput" placeholder="Example: Clive, Ifrit&apos;s Dominant" />
           <div class="field-note">
-            Leave this blank and U99 will try to detect your commander from a “Commander” section. Commander art is used visually, but the commander does not change the score yet.
+            Leave this blank and U99 will try to detect your commander from a “Commander” section. Commander-Aware mode uses this field for its experimental theme adjustment.
           </div>
           <div class="partner-grid single-partner-grid">
             <div>
@@ -142,7 +135,7 @@ Example:
 
         <div class="premium-score-card no-art" id="scoreShowcase">
           <div class="premium-score-inner">
-            <div class="score-showcase-kicker">Deck Uniqueness Score</div>
+            <div class="score-showcase-kicker">Adjusted Deck Score</div>
             <div class="score-circle" id="scoreCircle">
               <div class="score-number">
                 <strong id="scoreValue">0</strong>
@@ -168,7 +161,7 @@ Example:
           </div>
           <div class="stat">
             <strong id="avgUniquePct">0 / 100</strong>
-            <span>Average card score</span>
+            <span>Card Score Average</span>
           </div>
           <div class="stat">
             <strong id="staplePercent">0%</strong>
