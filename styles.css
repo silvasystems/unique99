@@ -2057,3 +2057,41 @@ button.primary {
     grid-template-columns: 1fr;
   }
 }
+
+
+
+/* Feedback cleanup and partner commander fields */
+.logo {
+  color: #03111f;
+}
+
+.logo span {
+  color: #ffffff;
+}
+
+.partner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.bottom-formula-section {
+  margin-top: 34px;
+  display: grid;
+  gap: 14px;
+}
+
+.score-explainer .score-guide {
+  margin-top: 12px;
+}
+
+.detail-panel .compact-guide-table {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 700px) {
+  .partner-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -114,3 +114,17 @@ Updated suggestion logic:
 - Unique Picks intentionally prioritize deeper EDHREC ranks.
 - Unique Picks filter out Commander Staples and Commander Favorites.
 - Swap Ideas only use Unique Picks that are meaningful uniqueness upgrades.
+
+
+## Feedback Cleanup + Partner Commander Update
+
+Updated:
+- Moved Compare Mode above commander entry.
+- Added two optional partner/background commander fields.
+- Removed visible compare mode note from results.
+- Moved score calculation and score improvement notes to the bottom of the results page.
+- Moved the score band guide and EDHREC rank table to the correct sections.
+- Removed the No Rank bucket from UI and reporting.
+- Reordered stat cards.
+- Fixed backend decklist send variable.
+- Combined partner commander color identities for mana symbols when the backend is used.

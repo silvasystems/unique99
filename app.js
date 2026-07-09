@@ -82,6 +82,8 @@ const BASIC_LANDS = new Set([
 
     const deckInput = document.getElementById("deckInput");
     const commanderInput = document.getElementById("commanderInput");
+    const partnerCommanderInput = document.getElementById("partnerCommanderInput");
+    const partnerCommanderInputTwo = document.getElementById("partnerCommanderInputTwo");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const sampleBtn = document.getElementById("sampleBtn");
     const clearBtn = document.getElementById("clearBtn");
@@ -97,6 +99,8 @@ const BASIC_LANDS = new Set([
     clearBtn.addEventListener("click", () => {
       deckInput.value = "";
       commanderInput.value = "";
+      if (partnerCommanderInput) partnerCommanderInput.value = "";
+      if (partnerCommanderInputTwo) partnerCommanderInputTwo.value = "";
       document.getElementById("results").style.display = "none";
       setLookupProgress(0, parsedCards.length);
       errorBox.style.display = "none";
@@ -199,9 +203,9 @@ const BASIC_LANDS = new Set([
     function scoreFromRank(rank) {
       if (!rank) {
         return {
-          category: "No Rank",
-          points: 98,
-          bucket: "No Rank"
+          category: "Unique Sleepers",
+          points: 95,
+          bucket: "Unique Sleepers"
         };
       }
 
@@ -279,7 +283,7 @@ const BASIC_LANDS = new Set([
     }
 
     function formatRank(rank) {
-      return rank ? rank.toLocaleString() : "No Rank";
+      return rank ? rank.toLocaleString() : "N/A";
     }
 
     
@@ -335,12 +339,13 @@ function fireConfetti() {
 async function analyzeDeck() {
       const deckText = deckInput.value.trim();
       const manualCommander = commanderInput.value.trim();
+      const partnerCommanders = [partnerCommanderInput?.value.trim(), partnerCommanderInputTwo?.value.trim()].filter(Boolean);
       const compareMode = document.querySelector('input[name="compareMode"]:checked')?.value || "global";
 
       try {
         statusEl.textContent = "Checking backend analyzer...";
         setProgress(8);
-        const backendData = await analyzeWithBackend(input, manualCommander, compareMode);
+        const backendData = await analyzeWithBackend(deckText, manualCommander, compareMode, partnerCommanders);
         statusEl.textContent = "Rendering backend results...";
         setProgress(100);
         renderBackendResults(backendData);
@@ -437,7 +442,7 @@ async function analyzeDeck() {
 
       const average = found.reduce((sum, card) => sum + card.points, 0) / found.length;
       const ultraCount = found.filter(card => card.bucket === "Commander Staples").length;
-      const deepCount = found.filter(card => card.bucket === "Unique Sleepers" || card.bucket === "No Rank").length;
+      const deepCount = found.filter(card => card.bucket === "Unique Sleepers").length;
 
       let score = Math.round(average);
 
@@ -470,13 +475,24 @@ async function analyzeDeck() {
       return Array.from(colors);
     }
 
+
+    function formatCommanderDisplay(primary, partners = []) {
+      const names = [primary, ...(partners || [])].filter(Boolean);
+      return names.length ? names.join(" + ") : "";
+    }
+
     function updateColorPips(commanderCard, cards = []) {
       const colorPips = document.getElementById("colorPips");
       if (!colorPips) return;
 
-      let colors = commanderCard && Array.isArray(commanderCard.color_identity)
-        ? commanderCard.color_identity
-        : [];
+      let colors = [];
+      const commanderCards = [commanderCard, ...((commanderCard && commanderCard._partnerCards) || [])].filter(Boolean);
+      commanderCards.forEach(card => {
+        if (Array.isArray(card.color_identity)) {
+          card.color_identity.forEach(color => colors.push(color));
+        }
+      });
+      colors = [...new Set(colors)];
 
       if (!colors.length) {
         colors = getFallbackDeckColors(cards);
@@ -727,22 +743,7 @@ async function analyzeDeck() {
 }
 
     function renderCompareModeNote(compareMode) {
-      let note = document.getElementById("compareModeNote");
-      const verdict = document.getElementById("verdictText");
-      if (!verdict) return;
-
-      if (!note) {
-        note = document.createElement("div");
-        note.id = "compareModeNote";
-        note.className = "mode-note";
-        verdict.insertAdjacentElement("afterend", note);
-      }
-
-      if (compareMode === "commanderAware") {
-        note.textContent = "Mode: Commander-Aware Score, experimental synergy adjustment enabled.";
-      } else {
-        note.textContent = "Mode: Comparing against all Commander decks.";
-      }
+      return;
     }
 
     function renderSuggestionCards(containerId, cards) {
@@ -760,7 +761,7 @@ async function analyzeDeck() {
           <div class="suggestion-meta">
             <span class="suggestion-pill">Score ${card.points}/100</span>
             <span class="suggestion-pill">${card.category}</span>
-            ${card.edhrec_rank ? `<span class="suggestion-pill">Rank ${formatRank(card.edhrec_rank)}</span>` : `<span class="suggestion-pill">No Rank</span>`}
+            ${card.edhrec_rank ? `<span class="suggestion-pill">Rank ${formatRank(card.edhrec_rank)}</span>` : `<span class="suggestion-pill">N/A</span>`}
           </div>
           <div class="suggestion-reason">${escapeHtml(card.reason || "Suggested for your deck.")}</div>
         </div>
@@ -830,7 +831,6 @@ async function analyzeDeck() {
       document.getElementById("summaryText").textContent = summaryForScore(score);
       const verdictEl = document.getElementById("verdictText");
       if (verdictEl) verdictEl.textContent = verdictForScore(score);
-      renderCompareModeNote(compareMode);
 
       const rankedCards = cards.filter(card => card.edhrec_rank);
       const avgRank = rankedCards.length
@@ -860,7 +860,6 @@ async function analyzeDeck() {
       renderCompactRows("genericCardsTable", genericCards);
       renderCompactRows("uniqueCardsTable", uniqueCards);
 const buckets = [
-        "No Rank",
         "Unique Sleepers",
         "Pet Cards",
         "Playables",
@@ -1086,7 +1085,7 @@ const buckets = [
 
       const groupOrder = viewMode === "type"
         ? ["Creatures", "Instants", "Sorceries", "Artifacts", "Enchantments", "Planeswalkers", "Lands", "Other"]
-        : ["No Rank", "Unique Sleepers", "Pet Cards", "Playables", "Commander Favorites", "Commander Staples"];
+        : ["Unique Sleepers", "Pet Cards", "Playables", "Commander Favorites", "Commander Staples"];
 
       const groups = {};
       filtered.forEach(card => {

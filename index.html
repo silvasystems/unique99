@@ -56,11 +56,7 @@
           </div>
         </div>
         <div class="app-body">
-          <label for="commanderInput">Commander, optional</label>
-          <input id="commanderInput" placeholder="Example: Clive, Ifrit&apos;s Dominant" />
-          <div class="field-note">
-            Leave this blank and U99 will try to detect your commander from a “Commander” section. Commander art is used visually, but the commander does not change the score yet.
-          </div>
+
 
 
           <div class="compare-mode-card">
@@ -92,7 +88,24 @@
             </div>
           </div>
 
-          <label for="deckInput">Decklist</label>
+          
+          <label for="commanderInput">Commander, optional</label>
+          <input id="commanderInput" placeholder="Example: Clive, Ifrit&apos;s Dominant" />
+          <div class="field-note">
+            Leave this blank and U99 will try to detect your commander from a “Commander” section. Commander art is used visually, but the commander does not change the score yet.
+          </div>
+
+          <div class="partner-grid">
+            <div>
+              <label for="partnerCommanderInput">Partner commander, optional</label>
+              <input id="partnerCommanderInput" placeholder="Example: Tymna the Weaver" />
+            </div>
+            <div>
+              <label for="partnerCommanderInputTwo">Second partner/background, optional</label>
+              <input id="partnerCommanderInputTwo" placeholder="Example: Kraum, Ludevic's Opus" />
+            </div>
+          </div>
+<label for="deckInput">Decklist</label>
           <textarea id="deckInput" spellcheck="false" placeholder="Paste your Commander decklist here...
 
 Example:
@@ -154,10 +167,6 @@ Example:
 
         <div class="stat-grid">
           <div class="stat">
-            <strong id="cardsFound">0</strong>
-            <span>Cards scored</span>
-          </div>
-          <div class="stat">
             <strong id="avgRank">0</strong>
             <span>Avg EDHREC rank</span>
           </div>
@@ -171,34 +180,38 @@ Example:
           </div>
           <div class="stat">
             <strong id="deepPercent">0%</strong>
-            <span>Unique Sleepers + No Rank</span>
+            <span>Unique Sleepers</span>
+          </div>
+          <div class="stat">
+            <strong id="cardsFound">0</strong>
+            <span>Cards scored</span>
           </div>
           <div class="stat">
             <strong id="cardsMissed">0</strong>
             <span>Cards not found</span>
           </div>
         </div>
-
-
-        <div class="formula-note normal-note">
-          <strong>How your deck score is calculated</strong>
-          Each non-basic card gets a <strong>Card Uniqueness Score</strong> from 1 to 100 based on its EDHREC rank. U99 averages those scores together, then makes a small adjustment if the deck is especially staple-heavy or loaded with deep cuts.
+        <div class="score-explainer">
+          <h3 class="section-title">How the Score Works</h3>
+        <div class="score-guide">
+          <div class="guide-card"><strong>0-20</strong>Netdeck Energy</div>
+          <div class="guide-card"><strong>21-40</strong>Staple Heavy</div>
+          <div class="guide-card"><strong>41-60</strong>Balanced Brew</div>
+          <div class="guide-card"><strong>61-80</strong>Unique Brew</div>
+          <div class="guide-card"><strong>81-100</strong>Certified Jank Genius</div>
         </div>
-
-
-        <div class="formula-note normal-note">
-          <strong>How to raise your score</strong>
-          Replace Commander Staples and Commander Favorites with Pet Cards or Unique Sleepers that still support your game plan.
         </div>
+      </div>
 
-                <div class="score-explainer">
-        <h3 class="section-title">How the Score Works</h3>
+      <div class="detail-panel">
+        <h2 class="section-title deck-glance-title">Deck at a Glance</h2>
+                <h3 class="section-title centered-title">Card Score Guide</h3>
         <table class="compact-guide-table">
           <thead>
             <tr>
               <th>Category</th>
-              <th>Rank</th>
-              <th>Score</th>
+              <th>EDHREC Rank</th>
+              <th>Card Score</th>
             </tr>
           </thead>
           <tbody>
@@ -224,32 +237,11 @@ Example:
             </tr>
             <tr>
               <td>Unique Sleepers</td>
-              <td>16,001-31,000</td>
+              <td>16,001-31,000+</td>
               <td>76-95</td>
-            </tr>
-            <tr>
-              <td>No Rank</td>
-              <td>None</td>
-              <td>96-100</td>
             </tr>
           </tbody>
         </table>
-        <div class="formula-note small-note">
-          Lower card scores are more common cards. Higher card scores are more unique cards. Commander-Aware mode adds a small experimental synergy adjustment.
-        </div>
-        </div>
-      </div>
-
-      <div class="detail-panel">
-        <h2 class="section-title deck-glance-title">Deck at a Glance</h2>
-        <h3 class="section-title centered-title">Card Score Guide</h3>
-        <div class="score-guide">
-          <div class="guide-card"><strong>0-20</strong>Netdeck Energy</div>
-          <div class="guide-card"><strong>21-40</strong>Staple Heavy</div>
-          <div class="guide-card"><strong>41-60</strong>Balanced Brew</div>
-          <div class="guide-card"><strong>61-80</strong>Unique Brew</div>
-          <div class="guide-card"><strong>81-100</strong>Certified Jank Genius</div>
-        </div>
         <div class="helper-note score-guide-note">Lower card scores are more common cards. Higher card scores are more unique cards. Commander-Aware mode adds a small experimental synergy adjustment.</div>
 
         <div class="quick-table-grid">
@@ -312,7 +304,6 @@ Example:
             <option value="Playables">Playables</option>
             <option value="Pet Cards">Pet Cards</option>
             <option value="Unique Sleepers">Unique Sleepers</option>
-            <option value="No Rank">No Rank</option>
           </select>
 
           <select id="sortReport">
@@ -372,6 +363,22 @@ Example:
         </div>
         <div id="swapSuggestions" class="swap-list">
           <div class="suggestion-empty">Analyze a deck to see swap ideas.</div>
+        <div class="bottom-formula-section">
+
+
+<div class="formula-note normal-note">
+          <strong>How your deck score is calculated</strong>
+          Each non-basic card gets a <strong>Card Uniqueness Score</strong> from 1 to 100 based on its EDHREC rank. U99 averages those scores together, then makes a small adjustment if the deck is especially staple-heavy or loaded with deep cuts.
+        </div>
+
+
+
+        <div class="formula-note normal-note">
+          <strong>How to raise your score</strong>
+          Replace Commander Staples and Commander Favorites with Pet Cards or Unique Sleepers that still support your game plan.
+        </div>
+        </div>
+
         </div>
 
       </div>

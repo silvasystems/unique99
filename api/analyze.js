@@ -92,9 +92,9 @@ function interpolateScore(rank, minRank, maxRank, minScore, maxScore) {
 function scoreFromRank(rank) {
   if (!rank) {
     return {
-      category: "No Rank",
-      points: 98,
-      bucket: "No Rank"
+      category: "Unique Sleepers",
+      points: 95,
+      bucket: "Unique Sleepers"
     };
   }
 
@@ -489,7 +489,7 @@ function buildDeckStats(cards, missing) {
 
   const stapleCount = nonBasic.filter(card => card.points <= 20).length;
   const deepCount = nonBasic.filter(card => card.points >= 76).length;
-  const noRankCount = nonBasic.filter(card => card.category === "No Rank").length;
+  const noRankCount = nonBasic.filter(card => card.category === "Unique Sleepers").length;
 
   const staplePct = nonBasic.length ? stapleCount / nonBasic.length : 0;
   const deepPct = nonBasic.length ? deepCount / nonBasic.length : 0;
@@ -548,13 +548,36 @@ function uniqueNames(cards) {
   return output;
 }
 
+
+function mergeCommanderCards(cards) {
+  const valid = (cards || []).filter(Boolean);
+  if (!valid.length) return null;
+
+  const colorSet = new Set();
+  const textParts = [];
+  const typeParts = [];
+
+  valid.forEach(card => {
+    (card.color_identity || []).forEach(color => colorSet.add(color));
+    textParts.push(getCardText(card));
+    if (card.type_line) typeParts.push(card.type_line);
+  });
+
+  return {
+    name: valid.map(card => card.name).join(" + "),
+    color_identity: [...colorSet],
+    oracle_text: textParts.join("\n"),
+    type_line: typeParts.join(" / ")
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { decklist = "", commander = "", compareMode = "global" } = req.body || {};
+    const { decklist = "", commander = "", compareMode = "global", partnerCommanders = [] } = req.body || {};
     const parsed = parseDecklist(decklist);
 
     const commanderName = normalizeName(commander || parsed.commander);
@@ -563,6 +586,18 @@ export default async function handler(req, res) {
     if (commanderName) {
       commanderCard = await fetchNamedCard(commanderName);
     }
+
+    const partnerNames = Array.isArray(partnerCommanders)
+      ? partnerCommanders.map(normalizeName).filter(Boolean).slice(0, 2)
+      : [];
+
+    const partnerCards = [];
+    for (const partnerName of partnerNames) {
+      const partnerCard = await fetchNamedCard(partnerName);
+      if (partnerCard) partnerCards.push(partnerCard);
+    }
+
+    const commanderContext = mergeCommanderCards([commanderCard, ...partnerCards]);
 
     const names = uniqueNames(parsed.cards);
     const quantityByName = new Map();
@@ -589,16 +624,18 @@ export default async function handler(req, res) {
     const missingList = [...missingSet].map(name => ({ name }));
 
     if (compareMode === "commanderAware") {
-      applyCommanderAwareScores(cards, commanderCard);
+      applyCommanderAwareScores(cards, commanderContext);
     }
 
-    const suggestions = await buildSuggestions(cards, commanderCard);
+    const suggestions = await buildSuggestions(cards, commanderContext);
     const stats = buildDeckStats(cards, missingList);
 
     return res.status(200).json({
       ok: true,
       parsedCommander: commanderName || parsed.commander || "",
       commanderCard,
+      partnerCards,
+      partnerCommanders: partnerNames,
       cards,
       missing: missingList,
       stats,
