@@ -624,6 +624,7 @@ export default async function handler(req, res) {
 
     const suggestions = await buildSuggestions(cards, commanderContext);
     const stats = buildDeckStats(cards, missingList);
+    stats.score = Math.max(0, Math.min(100, Math.round(stats.average || 0)));
 
     return res.status(200).json({
       ok: true,

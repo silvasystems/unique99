@@ -442,7 +442,7 @@ async function analyzeDeck() {
       const ultraCount = found.filter(card => card.bucket === "Commander Staples").length;
       const deepCount = found.filter(card => card.bucket === "Unique Sleepers").length;
 
-      let score = Math.round(average);
+      let score = clampScore(Math.round(average));
 
       // Small deck-level adjustments.
       const ultraPct = ultraCount / found.length;
@@ -450,8 +450,6 @@ async function analyzeDeck() {
 
       if (ultraPct > 0.20) score -= 5;
       if (ultraPct > 0.35) score -= 8;
-      if (deepPct > 0.20) score += 5;
-      if (deepPct > 0.35) score += 7;
 
       score = Math.max(0, Math.min(100, score));
 

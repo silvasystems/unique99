@@ -181,3 +181,12 @@ Updated:
   - Playables: rank 1,001-3,000, score 41-60
   - Pet Cards: rank 3,001-8,000, score 61-80
   - Sleepers: rank 8,001+, score 81-100
+
+
+## Force Score Average Update
+
+Updated:
+- Commander Deck Uniqueness Score is forced to equal rounded Card Score Average.
+- Removed leftover score mutation logic from frontend fallback.
+- Frontend now ignores stale backend `stats.score` and uses rounded `stats.average`.
+- Backend also forces `stats.score` to rounded `stats.average`.
