@@ -4,18 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Unique 99 | Commander Deck Uniqueness Checker</title>
-  <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Cdefs%3E%3ClinearGradient id="g" x1="0" y1="0" x2="1" y2="1"%3E%3Cstop stop-color="%2393c5fd"/%3E%3Cstop offset="1" stop-color="%233b82f6"/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width="100" height="100" rx="24" fill="url(%23g)"/%3E%3Ctext x="50" y="59" text-anchor="middle" font-size="30" font-family="Arial" font-weight="900" fill="%2303111f"%3EU99%3C/text%3E%3C/svg%3E' />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/webp" href="assets/u99-logo.webp" />
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!-- Unique 99 static build: v1.17 | visible version badge removed -->
   <main class="page">
     <header>
       <div class="brand">
-        <div class="logo">U<span>99</span></div>
+        <div class="logo logo-image"><img src="assets/u99-logo.webp" alt="U99 logo" /></div>
         <div class="brand-text">
           <strong>Unique 99</strong>
-          <span>Commander Adjusted Deck Score</span>
+          <span>Commander Commander Deck Uniqueness Score</span>
         </div>
       </div>
     </header>
@@ -135,7 +135,7 @@ Example:
 
         <div class="premium-score-card no-art" id="scoreShowcase">
           <div class="premium-score-inner">
-            <div class="score-showcase-kicker">Adjusted Deck Score</div>
+            <div class="score-showcase-kicker">Commander Deck Uniqueness Score</div>
             <div class="score-circle" id="scoreCircle">
               <div class="score-number">
                 <strong id="scoreValue">0</strong>
@@ -195,7 +195,7 @@ Example:
       <div class="detail-panel">
         <h2 class="section-title deck-glance-title">Deck at a Glance</h2>
                 <h3 class="section-title centered-title">Card Score Guide</h3>
-        <table class="compact-guide-table">
+                <table class="compact-guide-table">
           <thead>
             <tr>
               <th>Category</th>
@@ -211,22 +211,22 @@ Example:
             </tr>
             <tr>
               <td>Commander Favorites</td>
-              <td>501-2,500</td>
-              <td>16-35</td>
+              <td>501-1,200</td>
+              <td>16-33</td>
             </tr>
             <tr>
               <td>Playables</td>
-              <td>2,501-8,000</td>
-              <td>36-55</td>
+              <td>1,201-4,000</td>
+              <td>34-53</td>
             </tr>
             <tr>
               <td>Pet Cards</td>
-              <td>8,001-16,000</td>
-              <td>56-75</td>
+              <td>4,001-10,000</td>
+              <td>54-75</td>
             </tr>
             <tr>
               <td>Unique Sleepers</td>
-              <td>16,001-31,000+</td>
+              <td>10,001+</td>
               <td>76-100</td>
             </tr>
           </tbody>
@@ -357,8 +357,7 @@ Example:
 
 <div class="formula-note normal-note">
           <strong>How your deck score is calculated</strong>
-          Each non-basic card gets a <strong>Card Uniqueness Score</strong> from 1 to 100 based on its EDHREC rank. U99 averages those scores together, then makes a small adjustment if the deck is especially staple-heavy or loaded with deep cuts.
-        </div>
+          The Commander Deck Uniqueness Score starts with your Card Score Average, then applies a small deck-level adjustment. The adjustment is capped at plus or minus 5 points and only moves strongly when the deck is clearly staple-heavy or clearly full of deep cuts.</div>
 
 
 

@@ -152,3 +152,17 @@ Updated:
 Renamed:
 - Deck Uniqueness Score -> Adjusted Deck Score
 - Average card score -> Card Score Average
+
+
+## Logo, Score Guide, and Adjustment Update
+
+Updated:
+- Uses uploaded U99 logo from `assets/u99-logo.webp`.
+- Renamed the main score back to Commander Deck Uniqueness Score.
+- Updated Card Score Guide:
+  - Staples: rank 1-500, score 1-15
+  - Favorites: rank 501-1,200, score 16-33
+  - Playables: rank 1,201-4,000, score 34-53
+  - Pet Cards: rank 4,001-10,000, score 54-75
+  - Sleepers: rank 10,001+, score 76-100
+- Reduced final deck adjustment to a max of plus or minus 5 points.

@@ -90,52 +90,52 @@ function interpolateScore(rank, minRank, maxRank, minScore, maxScore) {
 }
 
 function scoreFromRank(rank) {
-  if (!rank) {
-    return {
-      category: "Unique Sleepers",
-      points: 100,
-      bucket: "Unique Sleepers"
-    };
-  }
+      if (!rank) {
+        return {
+          category: "Unique Sleepers",
+          points: 100,
+          bucket: "Unique Sleepers"
+        };
+      }
 
-  if (rank <= 500) {
-    return {
-      category: "Commander Staples",
-      points: interpolateScore(rank, 1, 500, 1, 15),
-      bucket: "Commander Staples"
-    };
-  }
+      if (rank <= 500) {
+        return {
+          category: "Commander Staples",
+          points: interpolateScore(rank, 1, 500, 1, 15),
+          bucket: "Commander Staples"
+        };
+      }
 
-  if (rank <= 2500) {
-    return {
-      category: "Commander Favorites",
-      points: interpolateScore(rank, 501, 2500, 16, 35),
-      bucket: "Commander Favorites"
-    };
-  }
+      if (rank <= 1200) {
+        return {
+          category: "Commander Favorites",
+          points: interpolateScore(rank, 501, 1200, 16, 33),
+          bucket: "Commander Favorites"
+        };
+      }
 
-  if (rank <= 8000) {
-    return {
-      category: "Playables",
-      points: interpolateScore(rank, 2501, 8000, 36, 55),
-      bucket: "Playables"
-    };
-  }
+      if (rank <= 4000) {
+        return {
+          category: "Playables",
+          points: interpolateScore(rank, 1201, 4000, 34, 53),
+          bucket: "Playables"
+        };
+      }
 
-  if (rank <= 16000) {
-    return {
-      category: "Pet Cards",
-      points: interpolateScore(rank, 8001, 16000, 56, 75),
-      bucket: "Pet Cards"
-    };
-  }
+      if (rank <= 10000) {
+        return {
+          category: "Pet Cards",
+          points: interpolateScore(rank, 4001, 10000, 54, 75),
+          bucket: "Pet Cards"
+        };
+      }
 
-  return {
-    category: "Unique Sleepers",
-    points: interpolateScore(Math.min(rank, 31000), 16001, 31000, 76, 100),
-    bucket: "Unique Sleepers"
-  };
-}
+      return {
+        category: "Unique Sleepers",
+        points: interpolateScore(Math.min(rank, 31000), 10001, 31000, 76, 100),
+        bucket: "Unique Sleepers"
+      };
+    }
 
 function isBasicLand(card) {
   return Boolean(card.type_line && card.type_line.includes("Basic Land"));
@@ -494,12 +494,18 @@ function buildDeckStats(cards, missing) {
   const staplePct = nonBasic.length ? stapleCount / nonBasic.length : 0;
   const deepPct = nonBasic.length ? deepCount / nonBasic.length : 0;
 
-  let score = Math.round(average);
-  if (staplePct > 0.35) score -= 4;
-  if (deepPct > 0.25) score += 3;
-  if (noRankCount >= 3) score += 2;
+  let adjustment = 0;
 
-  score = clampScore(score);
+      if (staplePct >= 0.45) adjustment -= 5;
+      else if (staplePct >= 0.35) adjustment -= 3;
+      else if (staplePct >= 0.25) adjustment -= 1;
+
+      if (deepPct >= 0.45) adjustment += 5;
+      else if (deepPct >= 0.35) adjustment += 3;
+      else if (deepPct >= 0.25) adjustment += 1;
+
+      adjustment = Math.max(-5, Math.min(5, adjustment));
+      let score = clampScore(Math.round(average) + adjustment);
 
   return {
     score,
