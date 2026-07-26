@@ -208,3 +208,12 @@ Updated:
   - Commander Favorites -1
   - Commander Staples -2
 - Removed Swap Ideas section from the UI.
+
+
+## Remove Suggested Adds Update
+
+Updated:
+- Removed Suggested Adds from the UI.
+- Removed Synergy Picks and Unique Picks from the page.
+- Backend no longer generates suggestion results.
+- Frontend fallback no longer generates suggestion results.

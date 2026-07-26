@@ -667,7 +667,7 @@ export default async function handler(req, res) {
       applyCommanderAwareScores(cards, commanderContext);
     }
 
-    const suggestions = await buildSuggestions(cards, commanderContext);
+    const suggestions = { synergy: [], unique: [], swaps: [] };
     const stats = buildDeckStats(cards, missingList);
 
     return res.status(200).json({

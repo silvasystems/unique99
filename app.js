@@ -474,13 +474,7 @@ async function analyzeDeck() {
         applyCommanderAwareScores(found, commanderCard);
       }
 
-      let suggestions = { synergy: [], unique: [], swaps: [] };
-      try {
-        statusEl.textContent = "Finding suggested adds...";
-        suggestions = await buildSuggestions(found, commanderCard);
-      } catch (error) {
-        suggestions = { synergy: [], unique: [], swaps: [] };
-      }
+      const suggestions = { synergy: [], unique: [], swaps: [] };
 
       const average = found.reduce((sum, card) => sum + card.points, 0) / found.length;
       const ultraCount = found.filter(card => card.bucket === "Commander Staples").length;
@@ -931,7 +925,6 @@ const buckets = [
       fullReportCards = [...cards];
       resetReportControls();
       renderFullReport();
-      renderSuggestions(suggestions);
 
       if (missing.length) {
         errorBox.style.display = "block";
