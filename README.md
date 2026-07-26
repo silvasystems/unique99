@@ -228,3 +228,14 @@ Updated:
 - Frontend no longer runs suggestion searches during fallback analysis.
 - Added an 18-second backend timeout so the UI does not hang forever.
 - Updated status messages to be clearer.
+
+
+## Final Render Fix
+
+Updated:
+- Added missing browser-side `isBasicLand(card)` helper.
+- Fixed the bug where frontend fallback could finish all lookups and fail before rendering.
+- Removed leftover old staple-heavy penalty from frontend fallback.
+- Kept only the category-majority bonus system.
+- Reduced browser fallback delay between Scryfall calls.
+- Added a render try/catch so future render errors show a message instead of looking stuck.

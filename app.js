@@ -4,6 +4,14 @@ const BASIC_LANDS = new Set([
       "Snow-Covered Mountain", "Snow-Covered Forest"
     ]);
 
+
+    function isBasicLand(card) {
+      if (!card) return false;
+      const name = typeof card === "string" ? card : card.name;
+      const typeLine = typeof card === "object" && card.type_line ? card.type_line : "";
+      return BASIC_LANDS.has(name) || typeLine.includes("Basic Land");
+    }
+
     const SECTION_HEADERS = new Set([
       "commander", "commanders", "deck", "mainboard", "maindeck", "sideboard",
       "maybeboard", "companions", "companion", "creatures", "creature",
@@ -460,8 +468,8 @@ async function analyzeDeck() {
           missing.push(name);
         }
 
-        // Scryfall named endpoint asks for 2 requests per second, so keep this gentle.
-        await sleep(560);
+        // Keep fallback lookups gentle, but do not pause after the final card.
+        if (i < parsedCards.length - 1) await sleep(120);
       }
 
       if (!found.length) {
@@ -483,16 +491,18 @@ async function analyzeDeck() {
       const categoryBonus = getMajorityCategoryBonus(found.filter(card => !isBasicLand(card)));
       let score = clampScore(Math.round(average) + categoryBonus.bonus);
 
-      // Small deck-level adjustments.
       const ultraPct = ultraCount / found.length;
       const deepPct = deepCount / found.length;
 
-      if (ultraPct > 0.20) score -= 5;
-      if (ultraPct > 0.35) score -= 8;
-
-      score = Math.max(0, Math.min(100, score));
-
-      renderResults(found, missing, score, average, ultraPct, deepPct, parsed.commander, commanderCard, compareMode, suggestions);
+      try {
+        statusEl.textContent = "Generating results...";
+        renderResults(found, missing, score, average, ultraPct, deepPct, parsed.commander, commanderCard, compareMode, suggestions);
+      } catch (renderError) {
+        console.error("Rendering failed:", renderError);
+        statusEl.textContent = "Something went wrong while generating results. Check the console for details.";
+        analyzeBtn.disabled = false;
+        return;
+      }
 
       statusEl.textContent = `Done. Scored ${found.length} cards.`;
       hideLookupProgressSoon();

@@ -531,9 +531,8 @@ function buildDeckStats(cards, missing) {
     ? nonBasic.reduce((sum, card) => sum + card.points, 0) / nonBasic.length
     : 0;
 
-  const stapleCount = nonBasic.filter(card => card.points <= 20).length;
-  const deepCount = nonBasic.filter(card => card.points >= 76).length;
-  const noRankCount = nonBasic.filter(card => card.category === "Unique Sleepers").length;
+  const stapleCount = nonBasic.filter(card => card.bucket === "Commander Staples").length;
+  const deepCount = nonBasic.filter(card => card.bucket === "Unique Sleepers").length;
 
   const staplePct = nonBasic.length ? stapleCount / nonBasic.length : 0;
   const deepPct = nonBasic.length ? deepCount / nonBasic.length : 0;
