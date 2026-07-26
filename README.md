@@ -217,3 +217,14 @@ Updated:
 - Removed Synergy Picks and Unique Picks from the page.
 - Backend no longer generates suggestion results.
 - Frontend fallback no longer generates suggestion results.
+
+
+## Speed Hotfix
+
+Updated:
+- Fully disabled Suggested Adds generation.
+- Fully disabled Swap Ideas generation.
+- Backend no longer runs suggestion searches during analysis.
+- Frontend no longer runs suggestion searches during fallback analysis.
+- Added an 18-second backend timeout so the UI does not hang forever.
+- Updated status messages to be clearer.

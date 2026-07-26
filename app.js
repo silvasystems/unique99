@@ -385,10 +385,10 @@ async function analyzeDeck() {
       const compareMode = document.querySelector('input[name="compareMode"]:checked')?.value || "global";
 
       try {
-        statusEl.textContent = "Checking backend analyzer...";
+        statusEl.textContent = "Looking up cards...";
         setProgress(8);
         const backendData = await analyzeWithBackend(deckText, manualCommander, compareMode, partnerCommanders);
-        statusEl.textContent = "Rendering backend results...";
+        statusEl.textContent = "Generating results...";
         setProgress(100);
         renderBackendResults(backendData);
         statusEl.textContent = "Analysis complete.";
@@ -398,7 +398,7 @@ async function analyzeDeck() {
         return;
       } catch (backendError) {
         console.warn("Backend unavailable, falling back to browser analysis.", backendError);
-        statusEl.textContent = "Backend unavailable, using browser analysis...";
+        statusEl.textContent = "Backend is slow, using browser analysis...";
       }
 
       if (!deckText) {

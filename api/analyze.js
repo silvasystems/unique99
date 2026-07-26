@@ -679,7 +679,7 @@ export default async function handler(req, res) {
       cards,
       missing: missingList,
       stats,
-      suggestions,
+      suggestions, // currently disabled for speed
       compareMode,
       source: "backend"
     });
