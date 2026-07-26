@@ -195,43 +195,49 @@ Example:
       <div class="detail-panel">
         <h2 class="section-title deck-glance-title">Deck at a Glance</h2>
                 <h3 class="section-title centered-title">Card Score Guide</h3>
-                        <table class="compact-guide-table">
+                                <table class="compact-guide-table">
           <thead>
             <tr>
               <th>Category</th>
               <th>EDHREC Rank</th>
               <th>Card Score</th>
+              <th>Deck Bonus</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>Commander Staples</td>
               <td>1-400</td>
-              <td>1-20</td>
+              <td>1-27</td>
+              <td>-2</td>
             </tr>
             <tr>
               <td>Commander Favorites</td>
               <td>401-1,000</td>
-              <td>21-40</td>
+              <td>28-49</td>
+              <td>-1</td>
             </tr>
             <tr>
               <td>Playables</td>
-              <td>1,001-3,000</td>
-              <td>41-60</td>
+              <td>1,001-2,000</td>
+              <td>50-69</td>
+              <td>0</td>
             </tr>
             <tr>
               <td>Pet Cards</td>
-              <td>3,001-8,000</td>
-              <td>61-80</td>
+              <td>2,001-7,000</td>
+              <td>70-85</td>
+              <td>+2</td>
             </tr>
             <tr>
               <td>Unique Sleepers</td>
-              <td>8,001+</td>
-              <td>81-100</td>
+              <td>7,001+</td>
+              <td>86-100</td>
+              <td>+3</td>
             </tr>
           </tbody>
         </table>
-        <div class="helper-note score-guide-note">Lower card scores mean more commonly played cards. Higher card scores mean more unique cards.</div>
+        <div class="helper-note score-guide-note">Lower card scores mean more commonly played cards. Higher card scores mean more unique cards. The deck gets a small bonus or penalty based on which score category appears the most.</div>
 
         <div class="quick-table-grid">
           <div>
@@ -345,19 +351,12 @@ Example:
             </div>
           </div>
         </div>
-
-        <h3 class="section-title centered-title">Swap Ideas</h3>
-        <div class="helper-note suggestions-helper">
-          These are optional uniqueness upgrades: common cards from your deck paired with cards that score meaningfully higher. These are not strict power-level recommendations.
-        </div>
-        <div id="swapSuggestions" class="swap-list">
-          <div class="suggestion-empty">Analyze a deck to see swap ideas.</div>
-        <div class="bottom-formula-section">
+<div class="bottom-formula-section">
 
 
 <div class="formula-note normal-note">
           <strong>How your deck score is calculated</strong>
-          The Commander Deck Uniqueness Score is exactly the rounded Card Score Average of your scored non-basic cards. There is no separate deck-level adjustment in this version.</div>
+          The Commander Deck Uniqueness Score starts with the rounded Card Score Average, then adds one small category bonus based on whichever card category appears the most in your scored non-basic cards: Unique Sleepers +3, Pet Cards +2, Playables 0, Commander Favorites -1, Commander Staples -2.</div>
 
 
 

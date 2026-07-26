@@ -101,7 +101,7 @@ function scoreFromRank(rank) {
   if (rank <= 400) {
     return {
       category: "Commander Staples",
-      points: interpolateScore(rank, 1, 400, 1, 20),
+      points: interpolateScore(rank, 1, 400, 1, 27),
       bucket: "Commander Staples"
     };
   }
@@ -109,30 +109,30 @@ function scoreFromRank(rank) {
   if (rank <= 1000) {
     return {
       category: "Commander Favorites",
-      points: interpolateScore(rank, 401, 1000, 21, 40),
+      points: interpolateScore(rank, 401, 1000, 28, 49),
       bucket: "Commander Favorites"
     };
   }
 
-  if (rank <= 3000) {
+  if (rank <= 2000) {
     return {
       category: "Playables",
-      points: interpolateScore(rank, 1001, 3000, 41, 60),
+      points: interpolateScore(rank, 1001, 2000, 50, 69),
       bucket: "Playables"
     };
   }
 
-  if (rank <= 8000) {
+  if (rank <= 7000) {
     return {
       category: "Pet Cards",
-      points: interpolateScore(rank, 3001, 8000, 61, 80),
+      points: interpolateScore(rank, 2001, 7000, 70, 85),
       bucket: "Pet Cards"
     };
   }
 
   return {
     category: "Unique Sleepers",
-    points: interpolateScore(Math.min(rank, 31000), 8001, 31000, 81, 100),
+    points: interpolateScore(Math.min(rank, 31000), 7001, 31000, 86, 100),
     bucket: "Unique Sleepers"
   };
 }
@@ -478,7 +478,51 @@ async function buildSuggestions(cards, commanderCard) {
     if (swaps.length >= 5) break;
   }
 
-  return { synergy, unique, swaps };
+  return { synergy, unique, swaps: [] };
+}
+
+
+function getMajorityCategoryBonus(cards) {
+  const bonusMap = {
+    "Unique Sleepers": 3,
+    "Pet Cards": 2,
+    "Playables": 0,
+    "Commander Favorites": -1,
+    "Commander Staples": -2
+  };
+
+  const counts = {
+    "Commander Staples": 0,
+    "Commander Favorites": 0,
+    "Playables": 0,
+    "Pet Cards": 0,
+    "Unique Sleepers": 0
+  };
+
+  cards.forEach(card => {
+    const category = card.bucket || card.category;
+    const quantity = card.quantity || 1;
+    if (Object.prototype.hasOwnProperty.call(counts, category)) {
+      counts[category] += quantity;
+    }
+  });
+
+  const order = ["Unique Sleepers", "Pet Cards", "Playables", "Commander Favorites", "Commander Staples"];
+  let winningCategory = "Playables";
+  let winningCount = -1;
+
+  order.forEach(category => {
+    if (counts[category] > winningCount) {
+      winningCategory = category;
+      winningCount = counts[category];
+    }
+  });
+
+  return {
+    category: winningCategory,
+    bonus: bonusMap[winningCategory] || 0,
+    counts
+  };
 }
 
 function buildDeckStats(cards, missing) {
@@ -494,7 +538,8 @@ function buildDeckStats(cards, missing) {
   const staplePct = nonBasic.length ? stapleCount / nonBasic.length : 0;
   const deepPct = nonBasic.length ? deepCount / nonBasic.length : 0;
 
-  let score = clampScore(Math.round(average));
+  const categoryBonus = getMajorityCategoryBonus(nonBasic);
+  let score = clampScore(Math.round(average) + categoryBonus.bonus);
 
   return {
     score,
@@ -624,7 +669,6 @@ export default async function handler(req, res) {
 
     const suggestions = await buildSuggestions(cards, commanderContext);
     const stats = buildDeckStats(cards, missingList);
-    stats.score = Math.max(0, Math.min(100, Math.round(stats.average || 0)));
 
     return res.status(200).json({
       ok: true,

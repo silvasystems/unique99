@@ -2255,3 +2255,20 @@ button.primary {
     height: 54px !important;
   }
 }
+
+
+
+/* Bonus scoring update */
+.compact-guide-table th,
+.compact-guide-table td {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .compact-guide-table th,
+  .compact-guide-table td {
+    font-size: 11px;
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+}

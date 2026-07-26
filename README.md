@@ -190,3 +190,21 @@ Updated:
 - Removed leftover score mutation logic from frontend fallback.
 - Frontend now ignores stale backend `stats.score` and uses rounded `stats.average`.
 - Backend also forces `stats.score` to rounded `stats.average`.
+
+
+## Category Bonus + Score Guide Update
+
+Updated:
+- Card Score Guide:
+  - Staples: EDHREC rank 1-400, score 1-27
+  - Favorites: EDHREC rank 401-1,000, score 28-49
+  - Playables: EDHREC rank 1,001-2,000, score 50-69
+  - Pet Cards: EDHREC rank 2,001-7,000, score 70-85
+  - Sleepers: EDHREC rank 7,001+, score 86-100
+- Added category majority bonus:
+  - Unique Sleepers +3
+  - Pet Cards +2
+  - Playables 0
+  - Commander Favorites -1
+  - Commander Staples -2
+- Removed Swap Ideas section from the UI.

@@ -198,6 +198,50 @@ const BASIC_LANDS = new Set([
       return response.json();
     }
 
+
+    function getMajorityCategoryBonus(cards) {
+      const bonusMap = {
+        "Unique Sleepers": 3,
+        "Pet Cards": 2,
+        "Playables": 0,
+        "Commander Favorites": -1,
+        "Commander Staples": -2
+      };
+
+      const counts = {
+        "Commander Staples": 0,
+        "Commander Favorites": 0,
+        "Playables": 0,
+        "Pet Cards": 0,
+        "Unique Sleepers": 0
+      };
+
+      cards.forEach(card => {
+        const category = card.bucket || card.category;
+        const quantity = card.quantity || 1;
+        if (Object.prototype.hasOwnProperty.call(counts, category)) {
+          counts[category] += quantity;
+        }
+      });
+
+      const order = ["Unique Sleepers", "Pet Cards", "Playables", "Commander Favorites", "Commander Staples"];
+      let winningCategory = "Playables";
+      let winningCount = -1;
+
+      order.forEach(category => {
+        if (counts[category] > winningCount) {
+          winningCategory = category;
+          winningCount = counts[category];
+        }
+      });
+
+      return {
+        category: winningCategory,
+        bonus: bonusMap[winningCategory] || 0,
+        counts
+      };
+    }
+
     function scoreFromRank(rank) {
       if (!rank) {
         return {
@@ -210,7 +254,7 @@ const BASIC_LANDS = new Set([
       if (rank <= 400) {
         return {
           category: "Commander Staples",
-          points: interpolateScore(rank, 1, 400, 1, 20),
+          points: interpolateScore(rank, 1, 400, 1, 27),
           bucket: "Commander Staples"
         };
       }
@@ -218,30 +262,30 @@ const BASIC_LANDS = new Set([
       if (rank <= 1000) {
         return {
           category: "Commander Favorites",
-          points: interpolateScore(rank, 401, 1000, 21, 40),
+          points: interpolateScore(rank, 401, 1000, 28, 49),
           bucket: "Commander Favorites"
         };
       }
 
-      if (rank <= 3000) {
+      if (rank <= 2000) {
         return {
           category: "Playables",
-          points: interpolateScore(rank, 1001, 3000, 41, 60),
+          points: interpolateScore(rank, 1001, 2000, 50, 69),
           bucket: "Playables"
         };
       }
 
-      if (rank <= 8000) {
+      if (rank <= 7000) {
         return {
           category: "Pet Cards",
-          points: interpolateScore(rank, 3001, 8000, 61, 80),
+          points: interpolateScore(rank, 2001, 7000, 70, 85),
           bucket: "Pet Cards"
         };
       }
 
       return {
         category: "Unique Sleepers",
-        points: interpolateScore(Math.min(rank, 31000), 8001, 31000, 81, 100),
+        points: interpolateScore(Math.min(rank, 31000), 7001, 31000, 86, 100),
         bucket: "Unique Sleepers"
       };
     }
@@ -442,7 +486,8 @@ async function analyzeDeck() {
       const ultraCount = found.filter(card => card.bucket === "Commander Staples").length;
       const deepCount = found.filter(card => card.bucket === "Unique Sleepers").length;
 
-      let score = clampScore(Math.round(average));
+      const categoryBonus = getMajorityCategoryBonus(found.filter(card => !isBasicLand(card)));
+      let score = clampScore(Math.round(average) + categoryBonus.bonus);
 
       // Small deck-level adjustments.
       const ultraPct = ultraCount / found.length;
@@ -735,7 +780,7 @@ async function analyzeDeck() {
     if (swaps.length >= 5) break;
   }
 
-  return { synergy, unique, swaps };
+  return { synergy, unique, swaps: [] };
 }
 
     function renderCompareModeNote(compareMode) {
@@ -788,7 +833,7 @@ async function analyzeDeck() {
     function renderSuggestions(suggestions) {
       renderSuggestionCards("synergySuggestions", suggestions?.synergy || []);
       renderSuggestionCards("uniqueSuggestions", suggestions?.unique || []);
-      renderSwapIdeas(suggestions?.swaps || []);
+
     }
 
 
