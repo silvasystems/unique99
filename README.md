@@ -2,240 +2,93 @@
 
 Unique 99 is a Commander deck uniqueness scoring tool.
 
-Paste a Commander decklist, analyze card popularity using Scryfall EDHREC rank data, and get a uniqueness score out of 100.
+Paste a Commander decklist, and U99 scores every card by its Scryfall EDHREC rank, then gives the deck a uniqueness score out of 100. Results include the commander's art, card images for the whole deck, and a filterable card-by-card report.
 
-## Project Structure
+## Project structure
 
 ```txt
 unique99/
-  index.html
-  styles.css
-  app.js
-  README.md
-  .gitignore
+  index.html      page markup
+  styles.css      all styling
+  app.js          parsing, Scryfall lookups, scoring, rendering
+  assets/         logo and mana symbol images
+  vercel.json
 ```
 
-## Current Notes
+It's a static site with no build step and no backend. Everything runs in the browser.
 
-This cleanup build restores the simple U99 text logo and removes the need for mana image assets. Mana colors are now CSS pips, so there is no `assets` folder required for the current version.
+## How card lookup works
+
+1. The decklist is parsed. Moxfield, Archidekt, MTGO, and plain text formats work, including set codes and collector numbers like `1 Sol Ring (FIC) 358 *F*`. A `Commander` section is detected automatically; `Sideboard` and `Maybeboard` sections are ignored; basic lands are skipped.
+2. All cards are sent to Scryfall's [`/cards/collection`](https://scryfall.com/docs/api/cards/collection) endpoint in batches of 75. A 100-card deck takes one or two requests.
+   - When a set code and collector number are given, that exact printing is used, so the images match your printings.
+   - Any printing Scryfall doesn't recognize is retried by card name.
+   - Anything still missing gets a fuzzy-name lookup to catch typos (for example, "Swords to Plowshare").
+3. Results are cached in `localStorage` for 7 days, so analyzing the same deck again is instant.
+
+Only cards that still can't be matched are listed as "not found."
+
+## Scoring
+
+| Category            | EDHREC rank | Card score | Deck bonus |
+| ------------------- | ----------- | ---------- | ---------- |
+| Commander Staples   | 1–400       | 1–27       | −2         |
+| Commander Favorites | 401–1,000   | 28–49      | −1         |
+| Playables           | 1,001–2,000 | 50–69      | 0          |
+| Pet Cards           | 2,001–7,000 | 70–85      | +2         |
+| Unique Sleepers     | 7,001+      | 86–100     | +3         |
+
+Deck score = rounded average card score + the bonus for the most common category. Cards with no EDHREC rank score 100.
+
+**Same commander mode** scores each card by how often it appears in decks with your commander, using EDHREC's public commander data (`json.edhrec.com/pages/commanders/<slug>.json`, fetched straight from the browser). Partner pairs use the combined page.
+
+| Category            | In your commander's decks | Card score |
+| ------------------- | ------------------------- | ---------- |
+| Commander Staples   | 40%+                      | 1–27       |
+| Commander Favorites | 20–40%                    | 28–49      |
+| Playables           | 10–20%                    | 50–69      |
+| Pet Cards           | 5–10%                     | 70–85      |
+| Unique Sleepers     | under 5%                  | 86–100     |
+
+EDHREC only lists cards in about 5% or more of a commander's decks, so unlisted cards are Unique Sleepers: 100, or 94 if the card is a global staple. If EDHREC has no page for the commander, scoring falls back to global ranks and says so.
+
+**Commander-aware mode** (experimental) adds up to +10 for cards that match the deck's detected themes, plus +2 for staying in the commander's colors.
+
+## Other features
+
+- **Deck stats:** a mana curve and card type chart, compared with EDHREC's average deck for your commander when that data exists.
+- **Score colors and themes:** the score ring changes color by score band, and the page accent follows your commander's colors.
+- **Recent decks:** the last analyses are saved in `localStorage`. Re-analyzing an edited version of a deck shows how much the score changed.
+- **Share links:** the decklist, commanders, and mode are compressed into the URL hash (`#d=…`), so the link reproduces the results with no server.
+- **Share images:** a 4:5 post or 9:16 story image is drawn on a canvas, downloadable as PNG or PDF (jsPDF is loaded from cdnjs only when needed).
+
+## Running locally
+
+Any static file server works, for example:
+
+```bash
+npx http-server . -p 5199
+```
 
 ## Deploying on Vercel
 
-This is a static site.
+- Framework preset: Other
+- Build command: leave empty
+- Output directory: leave empty or `.`
 
-Recommended Vercel settings:
+## Changelog
 
-- Framework Preset: Other
-- Build Command: leave empty
-- Output Directory: leave empty or `.`
-- Install Command: leave empty
+### v2.1 — same-commander scoring, sharing, history
 
+- Added "Same commander" compare mode using EDHREC commander data, with per-card "played in X% of decks" info.
+- Added share links, post/story share images, and PDF export.
+- Added recent decks with score change tracking.
+- Added mana curve and card type charts, score band colors, commander color themes, and a card-flip loading animation.
 
-## Mana Symbol Assets
+### v2.0 — lookup fix + UI overhaul
 
-This build expects these files inside the `assets` folder:
-
-```txt
-assets/mana-w.png
-assets/mana-u.png
-assets/mana-b.png
-assets/mana-r.png
-assets/mana-g.png
-```
-
-Do not upload these mana files to the root of the repository. They must be inside `assets/`.
-
-
-## Feedback Round Update
-
-Layout changes:
-- Left side now prioritizes commander identity, score, verdict, stats, and score explanation.
-- Right side starts with Deck at a Glance.
-- Removed Deck Identity section.
-- Renamed quick tables to Most Common Cards and Most Unique Cards.
-- Moved report filter explanation under Full Card Report.
-- Tried brighter neon blue theme.
-
-
-## Compare Mode and Suggestions Update
-
-Added:
-- Compare Mode UI
-- All Commander Decks mode
-- Commander-Aware experimental scoring mode
-- This Commander disabled/coming soon mode
-- Updated EDHREC rank scale through 31,000
-- Suggested Adds
-- Synergy Picks
-- Unique Picks
-- Swap Ideas
-
-Backend/API caching is still a future upgrade.
-
-
-## Swap Logic Hotfix
-
-Updated Swap Ideas so they only show optional uniqueness upgrades:
-- cut card must be common/staple leaning
-- add card must score much higher
-- add card cannot be a Commander Staple or Commander Favorite
-- copy clarifies these are not strict power-level recommendations
-
-
-## Backend Analyze Update
-
-Added:
-
-```txt
-api/analyze.js
-package.json
-vercel.json
-```
-
-The frontend now tries `/api/analyze` first. If the backend is unavailable, it falls back to the original browser-based analysis.
-
-Backend benefits:
-- batched Scryfall card lookups using `/cards/collection`
-- fewer browser requests
-- simple in-memory cache while the function instance is warm
-- backend-ready path for better suggestions and future commander-specific comparison
-
-Deploy notes:
-- This is still a simple Vercel project.
-- Keep the static files in the repo root.
-- Keep mana assets inside `assets/`.
-- Vercel should automatically detect and deploy the `api/analyze.js` function.
-
-
-## Suggestion Logic Cleanup
-
-Updated suggestion logic:
-- Synergy Picks now avoid obvious staples when possible.
-- Unique Picks intentionally prioritize deeper EDHREC ranks.
-- Unique Picks filter out Commander Staples and Commander Favorites.
-- Swap Ideas only use Unique Picks that are meaningful uniqueness upgrades.
-
-
-## Feedback Cleanup + Partner Commander Update
-
-Updated:
-- Moved Compare Mode above commander entry.
-- Added two optional partner/background commander fields.
-- Removed visible compare mode note from results.
-- Moved score calculation and score improvement notes to the bottom of the results page.
-- Moved the score band guide and EDHREC rank table to the correct sections.
-- Removed the No Rank bucket from UI and reporting.
-- Reordered stat cards.
-- Fixed backend decklist send variable.
-- Combined partner commander color identities for mana symbols when the backend is used.
-
-
-## Compact Compare + Partner Cleanup
-
-Updated:
-- Compare Mode is now three compact cards in one row on desktop.
-- Partner commander input was simplified to one optional box.
-- Unique Sleepers now scale from 76 to 100 instead of stopping at 95.
-
-
-## Compare Mode Cleanup
-
-Updated:
-- Removed the disabled "This Commander" card from Compare Mode.
-- Added a small coming soon note for same-commander comparison.
-- Cleaned up Compare Mode text.
-- Updated commander field helper copy.
-
-
-## Score Label Update
-
-Renamed:
-- Deck Uniqueness Score -> Adjusted Deck Score
-- Average card score -> Card Score Average
-
-
-## Logo, Score Guide, and Adjustment Update
-
-Updated:
-- Uses uploaded U99 logo from `assets/u99-logo.webp`.
-- Renamed the main score back to Commander Deck Uniqueness Score.
-- Updated Card Score Guide:
-  - Staples: rank 1-500, score 1-15
-  - Favorites: rank 501-1,200, score 16-33
-  - Playables: rank 1,201-4,000, score 34-53
-  - Pet Cards: rank 4,001-10,000, score 54-75
-  - Sleepers: rank 10,001+, score 76-100
-- Reduced final deck adjustment to a max of plus or minus 5 points.
-
-
-## Final Score + Logo Update
-
-Updated:
-- Uses the newer uploaded U99 logo from `assets/u99-logo.webp`.
-- Fixed duplicated "Commander Commander Deck Uniqueness Score" copy.
-- Removed the deck-level adjustment entirely.
-- Commander Deck Uniqueness Score now equals the rounded Card Score Average.
-- Updated Card Score Guide:
-  - Staples: rank 1-400, score 1-20
-  - Favorites: rank 401-1,000, score 21-40
-  - Playables: rank 1,001-3,000, score 41-60
-  - Pet Cards: rank 3,001-8,000, score 61-80
-  - Sleepers: rank 8,001+, score 81-100
-
-
-## Force Score Average Update
-
-Updated:
-- Commander Deck Uniqueness Score is forced to equal rounded Card Score Average.
-- Removed leftover score mutation logic from frontend fallback.
-- Frontend now ignores stale backend `stats.score` and uses rounded `stats.average`.
-- Backend also forces `stats.score` to rounded `stats.average`.
-
-
-## Category Bonus + Score Guide Update
-
-Updated:
-- Card Score Guide:
-  - Staples: EDHREC rank 1-400, score 1-27
-  - Favorites: EDHREC rank 401-1,000, score 28-49
-  - Playables: EDHREC rank 1,001-2,000, score 50-69
-  - Pet Cards: EDHREC rank 2,001-7,000, score 70-85
-  - Sleepers: EDHREC rank 7,001+, score 86-100
-- Added category majority bonus:
-  - Unique Sleepers +3
-  - Pet Cards +2
-  - Playables 0
-  - Commander Favorites -1
-  - Commander Staples -2
-- Removed Swap Ideas section from the UI.
-
-
-## Remove Suggested Adds Update
-
-Updated:
-- Removed Suggested Adds from the UI.
-- Removed Synergy Picks and Unique Picks from the page.
-- Backend no longer generates suggestion results.
-- Frontend fallback no longer generates suggestion results.
-
-
-## Speed Hotfix
-
-Updated:
-- Fully disabled Suggested Adds generation.
-- Fully disabled Swap Ideas generation.
-- Backend no longer runs suggestion searches during analysis.
-- Frontend no longer runs suggestion searches during fallback analysis.
-- Added an 18-second backend timeout so the UI does not hang forever.
-- Updated status messages to be clearer.
-
-
-## Final Render Fix
-
-Updated:
-- Added missing browser-side `isBasicLand(card)` helper.
-- Fixed the bug where frontend fallback could finish all lookups and fail before rendering.
-- Removed leftover old staple-heavy penalty from frontend fallback.
-- Kept only the category-majority bonus system.
-- Reduced browser fallback delay between Scryfall calls.
-- Added a render try/catch so future render errors show a message instead of looking stuck.
+- Fixed most cards showing as "not found." The old frontend called backend functions that didn't exist, so it always fell back to one Scryfall request per card and got rate-limited after about 20 cards. Lookups are now batched.
+- Removed the unused `api/analyze.js` backend.
+- Added card images throughout: commander card and art backdrop, image strips for the most common and most unique cards, a card grid view, hover previews in list view, and a card detail popup with a flip button for double-faced cards.
+- Redesigned the layout, added a score ring, a category breakdown bar with clickable legend, and better mobile layout.
+- Parser now handles Archidekt categories, `Commander` / `Sideboard` sections, and partner commanders from the decklist.

@@ -4,359 +4,368 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Unique 99 | Commander Deck Uniqueness Checker</title>
+  <meta name="description" content="Paste a Commander decklist and get a uniqueness score out of 100, with card art and a full card-by-card report." />
   <link rel="icon" type="image/webp" href="assets/u99-logo.webp" />
-<link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://api.scryfall.com" />
+  <link rel="preconnect" href="https://cards.scryfall.io" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Unique 99 static build: v1.17 | visible version badge removed -->
+  <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+
   <main class="page">
-    <header>
-      <div class="brand">
-        <div class="logo logo-image"><img src="assets/u99-logo.webp" alt="U99 logo" /></div>
-        <div class="brand-text">
+    <header class="topbar">
+      <a class="brand" href="./">
+        <img class="brand-logo" src="assets/u99-logo.webp" alt="" />
+        <span class="brand-text">
           <strong>Unique 99</strong>
           <span>Commander Deck Uniqueness Score</span>
-        </div>
-      </div>
+        </span>
+      </a>
+      <span class="data-note">Card data &amp; images from <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a></span>
     </header>
 
     <section class="hero">
-      <div class="copy">
-        <h1>Score your <span>Commander brew.</span></h1>
-        <p>
-          Paste your Commander decklist, get a clear uniqueness score, and instantly see which cards make your 99 feel staple-heavy, personal, or genuinely creative.
+      <div class="hero-copy">
+        <span class="eyebrow">Commander deckbuilding tool</span>
+        <h1>How unique is <span class="accent">your 99?</span></h1>
+        <p class="lede">
+          Paste your decklist and get a uniqueness score out of 100, plus card art and a full report on which cards are common staples and which are your own picks.
         </p>
 
-        <div class="mini-grid">
-          <div class="mini-card">
-            <strong>Score</strong>
-            <span>Get a deck uniqueness score out of 100</span>
+        <ol class="steps">
+          <li><strong>Paste</strong><span>Moxfield, Archidekt, MTGO, or plain text</span></li>
+          <li><strong>Score</strong><span>Against every Commander deck, or just ones with your commander</span></li>
+          <li><strong>Share</strong><span>Post your score, or come back and track your changes</span></li>
+        </ol>
+
+        <div class="history" id="history" hidden>
+          <div class="history-head">
+            <span class="field-label">Recent decks</span>
+            <button type="button" class="link-btn" id="historyClear">Clear all</button>
           </div>
-          <div class="mini-card">
-            <strong>Improve</strong>
-            <span>Spot the staples pulling your score down</span>
-          </div>
-          <div class="mini-card">
-            <strong>Compare</strong>
-            <span>Sort your deck by score, rank, type, or category</span>
-          </div>
+          <div class="history-list" id="historyList"></div>
         </div>
 
-        <div class="note">
-          This deckbuilding tool compares your deck against general Commander card popularity using Scryfall EDHREC rank data.
-          It does not yet compare your deck against the same commander on EDHREC. That can be a future upgrade.
-        </div>
+        <p class="fine-print">
+          Card popularity comes from EDHREC, via Scryfall's global ranks and EDHREC's per-commander deck data. Recent decks are saved only in this browser.
+        </p>
       </div>
 
-      <div class="app-card">
-        <div class="app-head">
-          <div>
-            <h2>Paste your decklist</h2>
-            <span>Moxfield, Archidekt, or plain text card lists should work.</span>
+      <form class="panel input-panel" id="deckForm" autocomplete="off">
+        <div class="field">
+          <span class="field-label">Compare mode</span>
+          <div class="segmented three" role="radiogroup" aria-label="Compare mode">
+            <label>
+              <input type="radio" name="compareMode" value="global" checked />
+              <span><strong>All decks</strong><em>Global EDHREC rank</em></span>
+            </label>
+            <label>
+              <input type="radio" name="compareMode" value="sameCommander" />
+              <span><strong>Same commander</strong><em>vs. decks with your commander</em></span>
+            </label>
+            <label>
+              <input type="radio" name="compareMode" value="commanderAware" />
+              <span><strong>Commander-aware</strong><em>Experimental theme boost</em></span>
+            </label>
           </div>
         </div>
-        <div class="app-body">
-          <div class="compare-mode-card">
-            <div class="compare-mode-head">
-              <div>
-                <div class="compare-mode-title">Compare Mode</div>
-                <div class="compare-coming-soon">Coming soon: compare against decks using the same commander.</div>
-              </div>
-            </div>
 
-            <div class="compare-options compare-options-two">
-              <label class="compare-option active">
-                <input type="radio" name="compareMode" value="global" checked />
-                <span>
-                  <strong>All Commander Decks</strong>
-                  <em>Uses global EDHREC rank</em>
-                </span>
-              </label>
-
-              <label class="compare-option">
-                <input type="radio" name="compareMode" value="commanderAware" />
-                <span>
-                  <strong>Commander-Aware</strong>
-                  <em>Experimental theme adjustment</em>
-                </span>
-              </label>
-            </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="commanderInput">Commander <em>optional</em></label>
+            <input id="commanderInput" placeholder="Clive, Ifrit's Dominant" />
           </div>
-<label for="commanderInput">Commander, optional</label>
-          <input id="commanderInput" placeholder="Example: Clive, Ifrit&apos;s Dominant" />
-          <div class="field-note">
-            Leave this blank and U99 will try to detect your commander from a “Commander” section. Commander-Aware mode uses this field for its experimental theme adjustment.
+          <div class="field">
+            <label class="field-label" for="partnerCommanderInput">Partner <em>optional</em></label>
+            <input id="partnerCommanderInput" placeholder="Tymna the Weaver" />
           </div>
-          <div class="partner-grid single-partner-grid">
-            <div>
-              <label for="partnerCommanderInput">Partner commander, optional</label>
-              <input id="partnerCommanderInput" placeholder="Example: Tymna the Weaver" />
-            </div>
+        </div>
+        <p class="hint">Leave the commander blank and U99 will look for a "Commander" section in your list.</p>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label class="field-label" for="deckInput">Decklist</label>
+            <span class="line-count" id="lineCount"></span>
           </div>
-
-<label for="deckInput">Decklist</label>
-          <textarea id="deckInput" spellcheck="false" placeholder="Paste your Commander decklist here...
-
-Example:
-1 Sol Ring
+          <textarea id="deckInput" spellcheck="false" placeholder="1 Sol Ring
 1 Arcane Signet
-1 Command Tower
+1 Command Tower (MKC) 256
 1 Lightning Greaves
-1 Swords to Plowshares"></textarea>
-
-          <div class="actions">
-            <button class="primary" id="analyzeBtn">Analyze Deck</button>
-            <button id="sampleBtn">Load Sample</button>
-            <button id="clearBtn">Clear</button>
-          </div>
-
-          <div class="status" id="status"></div>
-          <div class="lookup-progress" id="lookupProgress" aria-hidden="true"><div id="lookupProgressFill"></div></div>
-          <div class="error-box" id="errorBox"></div>
+..."></textarea>
         </div>
-      </div>
+
+        <div class="actions">
+          <button type="submit" class="btn btn-primary" id="analyzeBtn">
+            <span class="btn-label">Analyze deck</span>
+          </button>
+          <button type="button" class="btn" id="sampleBtn">Load sample</button>
+          <button type="button" class="btn btn-ghost" id="clearBtn">Clear</button>
+        </div>
+
+        <div class="progress" id="progress" hidden>
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <span class="progress-text" id="statusText"></span>
+        </div>
+        <div class="form-error" id="formError" hidden></div>
+      </form>
     </section>
 
-    <section class="results" id="results">
-      <div class="score-panel">
-        <div class="commander-hero" id="commanderHero">
-          <div class="commander-hero-inner">
-            <div class="commander-kicker">Commander</div>
-            <div class="commander-title" id="commanderDetected">Not detected</div>
-            <div class="color-pips" id="colorPips" aria-label="Commander color identity">
-              <img class="mana-symbol inactive" data-color="W" src="assets/mana-w.png" alt="White" title="White" />
-              <img class="mana-symbol inactive" data-color="U" src="assets/mana-u.png" alt="Blue" title="Blue" />
-              <img class="mana-symbol inactive" data-color="B" src="assets/mana-b.png" alt="Black" title="Black" />
-              <img class="mana-symbol inactive" data-color="R" src="assets/mana-r.png" alt="Red" title="Red" />
-              <img class="mana-symbol inactive" data-color="G" src="assets/mana-g.png" alt="Green" title="Green" />
+    <section class="loader" id="loader" hidden aria-live="polite">
+      <div class="section-divider">
+        <span class="divider-label">Shuffling up</span>
+      </div>
+      <div class="loader-cards" id="loaderCards"></div>
+      <p class="loader-text" id="loaderText">Looking up your cards…</p>
+    </section>
+
+    <section class="results" id="results" hidden>
+      <div class="section-divider">
+        <span class="divider-label">Your results</span>
+        <span class="divider-sub" id="resultsSub"></span>
+      </div>
+
+      <div class="dashboard">
+        <aside class="score-card panel" id="scoreHero">
+          <div class="score-card-art" id="scoreHeroArt"></div>
+
+          <div class="sc-commander">
+            <button type="button" class="commander-card" id="commanderCardBtn" aria-label="View commander card">
+              <img id="commanderImg" alt="" />
+              <img id="partnerImg" class="partner" alt="" hidden />
+            </button>
+            <div class="commander-info">
+              <span class="eyebrow">Commander</span>
+              <h2 id="commanderName">Not detected</h2>
+              <div class="pips" id="colorPips" aria-label="Color identity">
+                <img data-color="W" src="assets/mana-w.png" alt="White" title="White" />
+                <img data-color="U" src="assets/mana-u.png" alt="Blue" title="Blue" />
+                <img data-color="B" src="assets/mana-b.png" alt="Black" title="Black" />
+                <img data-color="R" src="assets/mana-r.png" alt="Red" title="Red" />
+                <img data-color="G" src="assets/mana-g.png" alt="Green" title="Green" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="premium-score-card no-art" id="scoreShowcase">
-          <div class="premium-score-inner">
-            <div class="score-showcase-kicker">Commander Deck Uniqueness Score</div>
-            <div class="score-circle" id="scoreCircle">
-              <div class="score-number">
+          <div class="sc-score">
+            <span class="sc-kicker">Commander Deck Uniqueness Score</span>
+            <div class="score-ring" id="scoreRing">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ringGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" style="stop-color: var(--band-2, #93c5fd)" />
+                    <stop offset="100%" style="stop-color: var(--band, #60a5fa)" />
+                  </linearGradient>
+                </defs>
+                <circle class="ring-bg" cx="60" cy="60" r="52" />
+                <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52" />
+              </svg>
+              <div class="score-ring-text">
                 <strong id="scoreValue">0</strong>
                 <span>out of 100</span>
               </div>
             </div>
-            <div class="label" id="scoreLabel">Uniqueness Score</div>
-            <div class="score-mini-meter" aria-hidden="true">
-              <div class="score-mini-fill" id="scoreFill"></div>
+            <span class="score-label" id="scoreLabel"></span>
+            <span class="score-delta" id="scoreDelta" hidden></span>
+            <div class="equation" id="scoreEquation"></div>
+            <p class="summary" id="summaryText"></p>
+            <p class="verdict" id="verdictText"></p>
+            <div class="share-row">
+              <button type="button" class="btn btn-primary btn-small" id="shareBtn">Share score</button>
+              <button type="button" class="btn btn-small" id="copyLinkBtn">Copy link</button>
             </div>
           </div>
-        </div>
 
-        <p class="summary" id="summaryText"></p>
-        
-        <div class="score-help">Higher score = more unique deck. Each card contributes a <strong>Card Uniqueness Score</strong> based on its EDHREC rank.</div>
-        <div class="verdict-line" id="verdictText">U99 Verdict will appear here.</div>
+          <div class="stats" id="stats"></div>
 
-        <div class="stat-grid">
-          <div class="stat">
-            <strong id="avgRank">0</strong>
-            <span>Avg EDHREC rank</span>
+          <div class="bands">
+            <h3 class="sc-heading">How the score works</h3>
+            <ol class="band-list" id="bandList"></ol>
           </div>
-          <div class="stat">
-            <strong id="avgUniquePct">0 / 100</strong>
-            <span>Card Score Average</span>
-          </div>
-          <div class="stat">
-            <strong id="staplePercent">0%</strong>
-            <span>Commander Staples</span>
-          </div>
-          <div class="stat">
-            <strong id="deepPercent">0%</strong>
-            <span>Unique Sleepers</span>
-          </div>
-          <div class="stat">
-            <strong id="cardsFound">0</strong>
-            <span>Cards scored</span>
-          </div>
-          <div class="stat">
-            <strong id="cardsMissed">0</strong>
-            <span>Cards not found</span>
-          </div>
-        </div>
-        <div class="score-explainer">
-          <h3 class="section-title">How the Score Works</h3>
-        <div class="score-guide">
-          <div class="guide-card"><strong>0-20</strong>Netdeck Energy</div>
-          <div class="guide-card"><strong>21-40</strong>Staple Heavy</div>
-          <div class="guide-card"><strong>41-60</strong>Balanced Brew</div>
-          <div class="guide-card"><strong>61-80</strong>Unique Brew</div>
-          <div class="guide-card"><strong>81-100</strong>Certified Jank Genius</div>
-        </div>
+        </aside>
+
+        <div class="glance">
+          <div class="notice notice-info" id="modeNotice" hidden></div>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h3>Deck at a glance</h3>
+              <span id="glanceSub"></span>
+            </header>
+            <div class="stack-bar" id="stackBar"></div>
+            <div class="table-wrap">
+              <table class="guide-table">
+                <thead>
+                  <tr><th>Category</th><th id="guideRankHead">EDHREC rank</th><th>Card score</th><th>Bonus</th><th class="your-col">Your deck</th></tr>
+                </thead>
+                <tbody id="guideBody"></tbody>
+              </table>
+            </div>
+            <p class="helper">
+              Lower card scores mean more commonly played cards; higher scores mean more unique ones.
+              The deck gets a small bonus or penalty from whichever category it has the most of. Click a row to filter your deck to that category.
+            </p>
+          </section>
+
+          <div class="notice" id="missingBox" hidden></div>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h3>Deck stats</h3>
+              <div class="chart-legend" id="chartLegend"></div>
+            </header>
+            <div class="charts">
+              <figure class="chart">
+                <figcaption>Mana curve <span>nonland cards by mana value</span></figcaption>
+                <div class="chart-body" id="curveChart"></div>
+              </figure>
+              <figure class="chart">
+                <figcaption>Card types <span>basic lands included</span></figcaption>
+                <div class="chart-body" id="typeChart"></div>
+              </figure>
+            </div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h3>Most common cards</h3>
+              <span>The staples pulling your score down</span>
+            </header>
+            <div class="card-strip" id="commonStrip"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h3>Most unique cards</h3>
+              <span>Your deepest cuts</span>
+            </header>
+            <div class="card-strip" id="uniqueStrip"></div>
+          </section>
         </div>
       </div>
 
-      <div class="detail-panel">
-        <h2 class="section-title deck-glance-title">Deck at a Glance</h2>
-                <h3 class="section-title centered-title">Card Score Guide</h3>
-                                <table class="compact-guide-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>EDHREC Rank</th>
-              <th>Card Score</th>
-              <th>Deck Bonus</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Commander Staples</td>
-              <td>1-400</td>
-              <td>1-27</td>
-              <td>-2</td>
-            </tr>
-            <tr>
-              <td>Commander Favorites</td>
-              <td>401-1,000</td>
-              <td>28-49</td>
-              <td>-1</td>
-            </tr>
-            <tr>
-              <td>Playables</td>
-              <td>1,001-2,000</td>
-              <td>50-69</td>
-              <td>0</td>
-            </tr>
-            <tr>
-              <td>Pet Cards</td>
-              <td>2,001-7,000</td>
-              <td>70-85</td>
-              <td>+2</td>
-            </tr>
-            <tr>
-              <td>Unique Sleepers</td>
-              <td>7,001+</td>
-              <td>86-100</td>
-              <td>+3</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="helper-note score-guide-note">Lower card scores mean more commonly played cards. Higher card scores mean more unique cards. The deck gets a small bonus or penalty based on which score category appears the most.</div>
+      <div class="section-divider">
+        <span class="divider-label">Full deck</span>
+      </div>
 
-        <div class="quick-table-grid">
-          <div>
-            <h3 class="section-title centered-title">Most Common Cards</h3>
-            <table class="compact-table">
-              <thead>
-                <tr>
-                  <th>Card</th>
-                  <th>Rank</th>
-                  <th>Score</th>
-                </tr>
-              </thead>
-              <tbody id="genericCardsTable"></tbody>
-            </table>
-          </div>
+      <section class="panel" id="reportPanel">
+        <header class="panel-head">
+          <h3>Your deck</h3>
+          <span id="reportCount"></span>
+        </header>
 
-          <div>
-            <h3 class="section-title centered-title">Most Unique Cards</h3>
-            <table class="compact-table">
-              <thead>
-                <tr>
-                  <th>Card</th>
-                  <th>Rank</th>
-                  <th>Score</th>
-                </tr>
-              </thead>
-              <tbody id="uniqueCardsTable"></tbody>
-            </table>
+        <div class="toolbar">
+          <input id="reportSearch" type="search" placeholder="Search cards…" />
+          <select id="typeFilter" aria-label="Card type">
+            <option value="All">All types</option>
+            <option>Creatures</option>
+            <option>Instants</option>
+            <option>Sorceries</option>
+            <option>Artifacts</option>
+            <option>Enchantments</option>
+            <option>Planeswalkers</option>
+            <option>Battles</option>
+            <option>Lands</option>
+            <option>Other</option>
+          </select>
+          <select id="categoryFilter" aria-label="Score category">
+            <option value="All">All categories</option>
+            <option>Commander Staples</option>
+            <option>Commander Favorites</option>
+            <option>Playables</option>
+            <option>Pet Cards</option>
+            <option>Unique Sleepers</option>
+          </select>
+          <select id="sortReport" aria-label="Sort">
+            <option value="scoreHigh">Most unique first</option>
+            <option value="scoreLow">Most common first</option>
+            <option value="name">Name A–Z</option>
+            <option value="cmc">Mana value</option>
+          </select>
+          <select id="groupMode" aria-label="Group">
+            <option value="none">No grouping</option>
+            <option value="type">Group by type</option>
+            <option value="category">Group by category</option>
+          </select>
+          <div class="view-toggle" role="group" aria-label="View">
+            <button type="button" data-view="grid" class="active" title="Card view" aria-label="Card view">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            </button>
+            <button type="button" data-view="list" title="List view" aria-label="List view">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="3" rx="1.5"/><rect x="3" y="10.5" width="18" height="3" rx="1.5"/><rect x="3" y="17" width="18" height="3" rx="1.5"/></svg>
+            </button>
           </div>
         </div>
 
-        <h3 class="section-title centered-title">Deck Breakdown</h3>
-        <div class="bars" id="breakdownBars"></div>
+        <div id="report"></div>
+      </section>
 
-        <h3 class="section-title centered-title">Full Card Report</h3>
-        <div class="helper-note report-helper">
-          Use the report filters below to sort by card score, EDHREC rank, card type, or score category.
-        </div>
-
-        <div class="report-controls">
-          <input id="reportSearch" type="text" placeholder="Search card name..." />
-
-          <select id="typeFilter">
-            <option value="All">All Card Types</option>
-            <option value="Creatures">Creatures</option>
-            <option value="Instants">Instants</option>
-            <option value="Sorceries">Sorceries</option>
-            <option value="Artifacts">Artifacts</option>
-            <option value="Enchantments">Enchantments</option>
-            <option value="Planeswalkers">Planeswalkers</option>
-            <option value="Lands">Lands</option>
-            <option value="Other">Other</option>
-          </select>
-
-          <select id="categoryFilter">
-            <option value="All">All Score Categories</option>
-            <option value="Commander Staples">Commander Staples</option>
-            <option value="Commander Favorites">Commander Favorites</option>
-            <option value="Playables">Playables</option>
-            <option value="Pet Cards">Pet Cards</option>
-            <option value="Unique Sleepers">Unique Sleepers</option>
-          </select>
-
-          <select id="sortReport">
-            <option value="scoreHigh">Highest Score</option>
-            <option value="scoreLow">Lowest Score</option>
-            <option value="rankCommon">Most Played</option>
-            <option value="rankUnique">Least Played</option>
-            <option value="name">Name A-Z</option>
-            <option value="type">Card Type</option>
-          </select>
-
-          <select id="viewMode">
-            <option value="flat">Flat Table</option>
-            <option value="type">Group by Card Type</option>
-            <option value="category">Group by Score Category</option>
-          </select>
-        </div>
-
-        <div class="report-count" id="reportCount">Showing 0 cards</div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Card</th>
-              <th>EDHREC Rank</th>
-              <th>Category</th>
-              <th>Card Score / 100</th>
-            </tr>
-          </thead>
-          <tbody id="cardTable"></tbody>
-        </table>
-</div>
-
-          <div class="suggestion-panel">
-            <h4>Unique Picks</h4>
-            </div>
-          </div>
-        </div>
-<div class="bottom-formula-section">
-
-
-<div class="formula-note normal-note">
+      <div class="formula-notes">
+        <div class="formula-note">
           <strong>How your deck score is calculated</strong>
-          The Commander Deck Uniqueness Score starts with the rounded Card Score Average, then adds one small category bonus based on whichever card category appears the most in your scored non-basic cards: Unique Sleepers +3, Pet Cards +2, Playables 0, Commander Favorites -1, Commander Staples -2.</div>
-
-
-
-        <div class="formula-note normal-note">
+          The score starts with your rounded Card Score Average (basic lands excluded), then adds one bonus based on which category appears most in your deck:
+          Unique Sleepers +3, Pet Cards +2, Playables 0, Commander Favorites −1, Commander Staples −2.
+        </div>
+        <div class="formula-note">
           <strong>How to raise your score</strong>
           Replace Commander Staples and Commander Favorites with Pet Cards or Unique Sleepers that still support your game plan.
         </div>
-        </div>
-
-        </div>
-
       </div>
     </section>
+
+    <footer class="footer">
+      Unique 99 is unofficial Fan Content. Card images and data © Wizards of the Coast, provided by Scryfall.
+    </footer>
   </main>
+
+  <dialog class="card-modal" id="cardModal">
+    <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+    <div class="modal-body">
+      <div class="modal-image">
+        <img id="modalImg" alt="" />
+        <button type="button" class="btn btn-small" id="modalFlip" hidden>Flip card</button>
+      </div>
+      <div class="modal-info" id="modalInfo"></div>
+    </div>
+  </dialog>
+
+  <dialog class="card-modal share-modal" id="shareModal">
+    <button type="button" class="modal-close" id="shareClose" aria-label="Close">×</button>
+    <div class="share-body">
+      <div class="share-preview">
+        <img id="sharePreview" alt="Share image preview" />
+        <div class="share-rendering" id="shareRendering">Rendering…</div>
+      </div>
+      <div class="share-controls">
+        <h3>Share your score</h3>
+        <span class="field-label">Template</span>
+        <div class="segmented" role="radiogroup" aria-label="Template">
+          <label>
+            <input type="radio" name="shareTemplate" value="post" checked />
+            <span><strong>Post</strong><em>4:5 for feeds</em></span>
+          </label>
+          <label>
+            <input type="radio" name="shareTemplate" value="story" />
+            <span><strong>Story</strong><em>9:16 for stories</em></span>
+          </label>
+        </div>
+        <div class="share-actions">
+          <button type="button" class="btn btn-primary" id="downloadPng">Download image</button>
+          <button type="button" class="btn" id="downloadPdf">Download PDF</button>
+          <button type="button" class="btn" id="nativeShare" hidden>Share…</button>
+          <button type="button" class="btn btn-ghost" id="shareCopyLink">Copy link to results</button>
+        </div>
+        <p class="hint" id="shareHint">The link opens these exact results for anyone, no account needed.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="chart-tip" id="chartTip" hidden></div>
+  <img class="hover-preview" id="hoverPreview" alt="" aria-hidden="true" />
   <div class="confetti-layer" id="confettiLayer" aria-hidden="true"></div>
   <script src="app.js" defer></script>
 </body>
