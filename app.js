@@ -927,7 +927,7 @@ Deck
     const art = commander ? imgFor(commander, "art") : "";
     $("scoreHeroArt").style.backgroundImage = art ? `url("${art}")` : "";
     $("scoreHero").classList.toggle("has-art", Boolean(art));
-    document.body.style.setProperty("--backdrop-image", art ? `url("${art}")` : "none");
+    setBackdrop(art);
 
     const commanderBtn = $("commanderCardBtn");
     commanderBtn.hidden = !commander;
@@ -1341,6 +1341,34 @@ Deck
     root.setProperty("--accent-2-soft", hexToRgba(b, 0.12));
   }
 
+  // Shrinks the commander art to a few dozen pixels; stretching that back up full-screen
+  // looks like a heavy blur but costs nothing per frame.
+  let backdropToken = 0;
+  async function setBackdrop(artUrl) {
+    const token = ++backdropToken;
+    if (!artUrl) {
+      document.body.style.setProperty("--backdrop-image", "none");
+      return;
+    }
+    const img = await loadCanvasImage(artUrl);
+    if (token !== backdropToken) return;
+    if (!img) {
+      document.body.style.setProperty("--backdrop-image", "none");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = 40;
+    canvas.height = Math.max(1, Math.round(40 * img.height / img.width));
+    const ctx = canvas.getContext("2d");
+    ctx.filter = "saturate(1.3)";
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    try {
+      document.body.style.setProperty("--backdrop-image", `url("${canvas.toDataURL("image/jpeg", 0.8)}")`);
+    } catch (error) {
+      document.body.style.setProperty("--backdrop-image", "none");
+    }
+  }
+
   function resetColorTheme() {
     ["--accent", "--accent-2", "--accent-glow", "--accent-soft", "--accent-line", "--accent-2-soft"]
       .forEach(prop => document.documentElement.style.removeProperty(prop));
@@ -1349,7 +1377,7 @@ Deck
   // ---------- Loading animation: card backs that flip to your cards ----------
 
   const LOADER_SLOTS = 7;
-  const LOADER_DEAL_MS = 800; // let every card finish dealing in before any flip
+  const LOADER_DEAL_MS = 650; // let every card finish dealing in before any flip
   let loaderStartedAt = 0;
 
   function startLoader() {
@@ -1359,7 +1387,7 @@ Deck
     $("loaderCards").innerHTML = Array.from({ length: LOADER_SLOTS }, (_, i) => `
       <div class="flip-card" style="--i:${i}">
         <div class="flip-inner">
-          <div class="flip-back"><img src="assets/u99-logo.webp" alt="" /></div>
+          <div class="flip-back"><img src="assets/u99-logo-256.webp" alt="" /></div>
           <div class="flip-front"></div>
         </div>
       </div>`).join("");
@@ -1371,7 +1399,7 @@ Deck
     if (text) $("loaderText").textContent = text;
   }
 
-  function preload(src, timeout = 2500) {
+  function preload(src, timeout = 1200) {
     return new Promise(resolve => {
       const img = new Image();
       const done = () => resolve(img);
@@ -1401,9 +1429,9 @@ Deck
     slots.forEach((slot, i) => {
       const card = chosen[i % chosen.length];
       slot.querySelector(".flip-front").innerHTML = `<img src="${imgFor(card, "normal")}" alt="" />`;
-      setTimeout(() => slot.classList.add("flipped"), i * 110);
+      setTimeout(() => slot.classList.add("flipped"), i * 80);
     });
-    await sleep(LOADER_SLOTS * 110 + 750);
+    await sleep(LOADER_SLOTS * 80 + 550);
   }
 
   function stopLoader() {
@@ -1789,7 +1817,7 @@ Deck
 
     const [art, logo, cmdImg, ...cardImgs] = await Promise.all([
       loadCanvasImage(commander ? imgFor(commander, "art") : ""),
-      loadCanvasImage("assets/u99-logo.webp"),
+      loadCanvasImage("assets/u99-logo-256.webp"),
       loadCanvasImage(commander ? imgFor(commander, "normal") : ""),
       ...uniqueCards.map(card => loadCanvasImage(imgFor(card, "normal")))
     ]);
@@ -2131,7 +2159,7 @@ Deck
     els.results.hidden = true;
     els.progress.hidden = true;
     showFormError("");
-    document.body.style.setProperty("--backdrop-image", "none");
+    setBackdrop("");
     resetColorTheme();
     history.replaceState(null, "", location.pathname);
     updateLineCount();
