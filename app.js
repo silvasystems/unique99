@@ -841,6 +841,8 @@ Deck
     renderStrip($("commonStrip"), common);
     renderStrip($("uniqueStrip"), unique);
 
+    $("resultsSub").textContent = `${total} cards scored · ${labelForScore(score)}`;
+
     // Deck at a glance: stacked bar + guide table with this deck's counts
     $("glanceSub").textContent = `Most of your deck: ${majority.category}`;
     $("stackBar").innerHTML = [...CATEGORIES].reverse().map(c => {

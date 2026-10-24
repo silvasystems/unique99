@@ -465,7 +465,51 @@ select option { background: var(--panel-solid); }
 
 .panel-head span { color: var(--muted); font-size: 13.5px; }
 
-.glance > .panel { padding: 22px; }
+.glance > .panel,
+.results > .panel { padding: 22px; }
+
+/* Labeled dividers between the input, the results and the full deck */
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 26px 0 2px;
+}
+
+.results > .section-divider:first-child { margin-top: 24px; }
+
+.section-divider::before,
+.section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.45));
+}
+
+.section-divider::after { background: linear-gradient(90deg, rgba(96, 165, 250, 0.45), transparent); }
+
+.divider-label {
+  padding: 7px 18px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #dbeafe;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(167, 139, 250, 0.16));
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  box-shadow: 0 0 28px rgba(59, 130, 246, 0.22);
+  white-space: nowrap;
+}
+
+.divider-sub {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.divider-sub:empty { display: none; }
 
 /* Dashboard: score card on the left, deck details on the right */
 
@@ -476,7 +520,7 @@ select option { background: var(--panel-solid); }
   align-items: start;
 }
 
-.dashboard > *, .glance > * { min-width: 0; }
+.results > *, .dashboard > *, .glance > * { min-width: 0; }
 
 .glance {
   display: grid;
@@ -1185,14 +1229,17 @@ td.muted { color: var(--muted); }
 
 .toolbar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  grid-template-columns: minmax(200px, 1.5fr) repeat(4, minmax(0, 1fr)) auto;
   gap: 8px;
   margin-bottom: 18px;
 }
 
 .toolbar input, .toolbar select { padding: 9px 12px; font-size: 14px; }
 
-.toolbar input { grid-column: 1 / -1; }
+@media (max-width: 960px) {
+  .toolbar { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
+  .toolbar input { grid-column: 1 / -1; }
+}
 
 .view-toggle {
   display: flex;
@@ -1467,6 +1514,7 @@ td.muted { color: var(--muted); }
   .card-strip { grid-template-columns: repeat(5, 40%); overflow-x: auto; padding: 6px 2px 10px; scroll-snap-type: x mandatory; }
   .strip-card { scroll-snap-align: start; }
   .formula-notes { grid-template-columns: 1fr; }
+  .divider-sub { display: none; }
   .toolbar { grid-template-columns: 1fr 1fr; }
   .card-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px 10px; }
   .grid-card .score-badge { min-width: 28px; height: 22px; font-size: 12px; right: -4px; top: -4px; }
