@@ -765,27 +765,65 @@ Deck
       ring.style.strokeDashoffset = `${circumference * (1 - score / 100)}`;
     }));
     animateNumber($("scoreValue"), score);
-    $("verdictText").textContent = verdictForScore(score);
+    $("verdictText").innerHTML = `<strong>U99 Verdict:</strong> ${escapeHtml(verdictForScore(score))}`;
     $("summaryText").textContent = summaryForScore(score);
 
+    // Score equation: average + category bonus = score
+    const roundedAvg = Math.round(average);
+    const bonusText = majority.bonus > 0 ? `+${majority.bonus}` : majority.bonus < 0 ? `−${Math.abs(majority.bonus)}` : "+0";
+    const majorityCat = CATEGORY_BY_NAME[majority.category];
+    $("scoreEquation").innerHTML = `
+      <span class="eq-term"><strong>${roundedAvg}</strong><em>Card avg</em></span>
+      <span class="eq-op">${majority.bonus < 0 ? "−" : "+"}</span>
+      <span class="eq-term ${majorityCat.cls}"><strong class="eq-bonus">${Math.abs(majority.bonus)}</strong><em>${majority.category}</em></span>
+      <span class="eq-op">=</span>
+      <span class="eq-term eq-total"><strong>${score}</strong><em>Deck score</em></span>`;
+
     // Stats
+    const total = cards.length;
     const ranked = cards.filter(c => c.edhrec_rank);
     const avgRank = ranked.length ? Math.round(ranked.reduce((s, c) => s + c.edhrec_rank, 0) / ranked.length) : 0;
-    const pct = name => `${Math.round((majority.counts[name] / cards.length) * 100)}%`;
-    const bonusText = majority.bonus > 0 ? `+${majority.bonus}` : `${majority.bonus}`;
-    $("stats").innerHTML = [
-      ["Card score average", `${Math.round(average)}`, `Deck bonus ${bonusText} (${majority.category})`],
-      ["Avg EDHREC rank", avgRank ? `#${avgRank.toLocaleString()}` : "N/A", "Lower = more popular"],
-      ["Commander Staples", pct("Commander Staples"), `${majority.counts["Commander Staples"]} cards`],
-      ["Unique Sleepers", pct("Unique Sleepers"), `${majority.counts["Unique Sleepers"]} cards`],
-      ["Cards scored", `${cards.length}`, "Basic lands excluded"],
-      ["Not found", `${missing.length}`, missing.length ? "See list below" : "Everything matched"]
-    ].map(([label, value, sub]) => `
-      <div class="stat">
+    const avgRankCat = CATEGORY_BY_NAME[scoreFromRank(avgRank).category];
+    const share = name => Math.round((majority.counts[name] / total) * 100);
+
+    const tile = ({ label, value, unit = "", meter, cls = "", sub }) => `
+      <div class="stat ${cls}">
         <span class="stat-label">${label}</span>
-        <strong>${escapeHtml(value)}</strong>
+        <strong>${escapeHtml(value)}${unit ? `<small>${unit}</small>` : ""}</strong>
+        <span class="meter"><span style="width:${Math.max(2, Math.min(100, meter))}%"></span></span>
         <span class="stat-sub">${escapeHtml(sub)}</span>
-      </div>`).join("");
+      </div>`;
+
+    $("stats").innerHTML = [
+      tile({ label: "Card score average", value: `${roundedAvg}`, unit: "/100", meter: average, cls: "accent", sub: `Bonus ${bonusText} from ${majority.category}` }),
+      tile({ label: "Avg EDHREC rank", value: avgRank ? `#${avgRank.toLocaleString()}` : "N/A", meter: avgRank ? scoreFromRank(avgRank).points : 0, cls: avgRankCat.cls, sub: avgRank ? `Typical card is a ${avgRankCat.name.replace(/s$/, "")}` : "No ranked cards" }),
+      tile({ label: "Commander Staples", value: `${share("Commander Staples")}`, unit: "%", meter: share("Commander Staples"), cls: "cat-staples", sub: `${majority.counts["Commander Staples"]} of ${total} cards` }),
+      tile({ label: "Unique Sleepers", value: `${share("Unique Sleepers")}`, unit: "%", meter: share("Unique Sleepers"), cls: "cat-sleepers", sub: `${majority.counts["Unique Sleepers"]} of ${total} cards` })
+    ].join("") + `
+      <div class="stat-strip">
+        <span><strong>${total}</strong> cards scored</span>
+        <span class="${missing.length ? "warn" : "ok"}"><strong>${missing.length}</strong> not found</span>
+        <span class="muted">Basic lands excluded</span>
+      </div>`;
+
+    // Score bands, with the deck's band highlighted
+    const bands = [
+      [0, 20, "Netdeck Energy"],
+      [21, 40, "Staple Heavy"],
+      [41, 60, "Balanced Brew"],
+      [61, 80, "Unique Brew"],
+      [81, 100, "Certified Jank Genius"]
+    ];
+    $("bandList").innerHTML = bands.map(([lo, hi, name]) => {
+      const here = score >= lo && score <= hi;
+      const pos = here ? ((score - lo) / (hi - lo)) * 100 : 0;
+      return `
+        <li class="${here ? "current" : ""}">
+          <span class="band-range">${lo}–${hi}</span>
+          <span class="band-name">${name}</span>
+          ${here ? `<span class="band-here">You're here</span><span class="band-marker" style="left:${pos}%"></span>` : ""}
+        </li>`;
+    }).join("");
 
     // Missing cards
     const missingBox = $("missingBox");
@@ -803,22 +841,37 @@ Deck
     renderStrip($("commonStrip"), common);
     renderStrip($("uniqueStrip"), unique);
 
-    // Breakdown
-    $("stackBar").innerHTML = CATEGORIES.map(c => {
+    // Deck at a glance: stacked bar + guide table with this deck's counts
+    $("glanceSub").textContent = `Most of your deck: ${majority.category}`;
+    $("stackBar").innerHTML = [...CATEGORIES].reverse().map(c => {
       const count = majority.counts[c.name];
       if (!count) return "";
-      const width = (count / cards.length) * 100;
-      return `<span class="${c.cls}" style="width:${width}%" title="${c.name}: ${count}"></span>`;
+      return `<span class="${c.cls}" style="width:${(count / total) * 100}%" title="${c.name}: ${count}"></span>`;
     }).join("");
-    $("legend").innerHTML = CATEGORIES.map(c => {
+
+    const ranges = {
+      "Commander Staples": ["1–400", "1–27"],
+      "Commander Favorites": ["401–1,000", "28–49"],
+      "Playables": ["1,001–2,000", "50–69"],
+      "Pet Cards": ["2,001–7,000", "70–85"],
+      "Unique Sleepers": ["7,001+", "86–100"]
+    };
+    const maxCount = Math.max(...CATEGORIES.map(c => majority.counts[c.name]), 1);
+    $("guideBody").innerHTML = [...CATEGORIES].reverse().map(c => {
       const count = majority.counts[c.name];
+      const isMajority = c.name === majority.category;
+      const bonus = c.bonus > 0 ? `+${c.bonus}` : c.bonus < 0 ? `−${Math.abs(c.bonus)}` : "0";
       return `
-        <button type="button" class="legend-item" data-category="${c.name}">
-          <i class="dot ${c.cls}"></i>
-          <span>${c.name}</span>
-          <strong>${count}</strong>
-          <em>${Math.round((count / cards.length) * 100)}%</em>
-        </button>`;
+        <tr class="guide-row ${c.cls} ${isMajority ? "majority" : ""}" data-category="${c.name}" tabindex="0">
+          <td><span class="cat-tag"><i class="dot ${c.cls}"></i>${c.name}</span>${isMajority ? `<span class="majority-tag">Most common</span>` : ""}</td>
+          <td>${ranges[c.name][0]}</td>
+          <td>${ranges[c.name][1]}</td>
+          <td class="bonus">${bonus}</td>
+          <td class="your-col">
+            <span class="your-bar"><span style="width:${(count / maxCount) * 100}%"></span></span>
+            <span class="your-num"><strong>${count}</strong><span class="pct"> · ${Math.round((count / total) * 100)}%</span></span>
+          </td>
+        </tr>`;
     }).join("");
 
     resetReportControls();
@@ -833,6 +886,7 @@ Deck
     container.innerHTML = cards.map((card, i) => `
       <button type="button" class="strip-card" data-name="${escapeHtml(card.name)}" style="--i:${i}">
         <span class="card-img">${cardImageTag(card, "normal")}</span>
+        <span class="strip-name">${escapeHtml(frontFaceName(card.name))}</span>
         <span class="strip-meta">
           ${scoreBadge(card)}
           <span class="strip-rank">${formatRank(card.edhrec_rank)}</span>
@@ -1090,13 +1144,20 @@ Deck
     }
   } catch (error) { /* ignore */ }
 
-  $("legend").addEventListener("click", event => {
-    const item = event.target.closest(".legend-item");
-    if (!item) return;
+  function filterToCategory(row) {
     const filter = $("categoryFilter");
-    filter.value = filter.value === item.dataset.category ? "All" : item.dataset.category;
+    filter.value = filter.value === row.dataset.category ? "All" : row.dataset.category;
     renderReport();
     $("reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("guideBody").addEventListener("click", event => {
+    const row = event.target.closest(".guide-row");
+    if (row) filterToCategory(row);
+  });
+  $("guideBody").addEventListener("keydown", event => {
+    const row = event.target.closest(".guide-row");
+    if (row && event.key === "Enter") filterToCategory(row);
   });
 
   // Open the modal from any card in the results.
