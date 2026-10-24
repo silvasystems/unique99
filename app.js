@@ -11,6 +11,35 @@
   const REQUEST_GAP_MS = 110;
   const CACHE_KEY = "u99-card-cache-v2";
   const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+  const EDHREC = "https://json.edhrec.com/pages/commanders";
+  const EDH_CACHE_PREFIX = "u99-edh-v1:";
+  const EDH_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
+  const HISTORY_KEY = "u99-history-v1";
+  const HISTORY_MAX = 24;
+  const SITE_URL = "unique99-github-io.vercel.app";
+
+  // Score bands: label, ring colors.
+  const BANDS = [
+    { lo: 0, hi: 20, name: "Netdeck Energy", color: "#94a3b8", color2: "#e2e8f0" },
+    { lo: 21, hi: 40, name: "Staple Heavy", color: "#38bdf8", color2: "#bae6fd" },
+    { lo: 41, hi: 60, name: "Balanced Brew", color: "#6d8cff", color2: "#93c5fd" },
+    { lo: 61, hi: 80, name: "Unique Brew", color: "#b57bff", color2: "#e9d5ff" },
+    { lo: 81, hi: 100, name: "Certified Jank Genius", color: "#fbbf24", color2: "#fef3c7" }
+  ];
+
+  // Page accent per commander color (WUBRG order, colorless last).
+  const COLOR_THEME = {
+    W: "#f3dc9b",
+    U: "#60a5fa",
+    B: "#b39dfa",
+    R: "#fb7c6a",
+    G: "#4ade80",
+    C: "#cbd5e1"
+  };
+
+  // Chart series colors, validated for CVD separation on the dark panel.
+  const CHART_YOU = "#4f8ff0";
+  const CHART_AVG = "#b98516";
 
   const CATEGORIES = [
     { name: "Commander Staples", cls: "cat-staples", bonus: -2 },
@@ -149,7 +178,9 @@ Deck
     results: $("results"),
     report: $("report"),
     modal: $("cardModal"),
-    hover: $("hoverPreview")
+    hover: $("hoverPreview"),
+    loader: $("loader"),
+    shareModal: $("shareModal")
   };
 
   const state = {
@@ -157,7 +188,11 @@ Deck
     commanders: [],
     view: "grid",
     modalCard: null,
-    modalFace: 0
+    modalFace: 0,
+    mode: "global",     // scoring mode actually used for the current results
+    edh: null,          // EDHREC data for the current commander, if found
+    result: null,       // last rendered result, used by share images
+    shareBlobs: {}
   };
 
   // ---------- Small helpers ----------
@@ -567,12 +602,115 @@ Deck
     };
   }
 
+  // ---------- Same-commander comparison (EDHREC) ----------
+
+  function edhrecSlug(name) {
+    return frontFaceName(name)
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/['’]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function slimEdhrec(slug, data) {
+    const jsonDict = (data.container && data.container.json_dict) || {};
+    const views = (jsonDict.cardlists || []).flatMap(list => list.cardviews || []);
+    const cards = {};
+    let maxPotential = 0;
+    views.forEach(view => {
+      if (!view.name || !view.potential_decks) return;
+      maxPotential = Math.max(maxPotential, view.potential_decks);
+      cards[nameKey(view.name)] = [view.num_decks, view.potential_decks];
+    });
+
+    const types = {};
+    const pie = data.panels && data.panels.piechart && data.panels.piechart.content;
+    (pie || []).forEach(slice => { types[slice.label] = slice.value; });
+
+    return {
+      slug,
+      name: String(data.header || "").replace(/\s*\(Commander\)\s*$/i, ""),
+      numDecks: (jsonDict.card && jsonDict.card.num_decks) || maxPotential,
+      cards,
+      curve: (data.panels && data.panels.mana_curve) || null,
+      types
+    };
+  }
+
+  async function fetchCommanderStats(commanders) {
+    if (!commanders.length) return null;
+    const slugs = commanders.map(c => edhrecSlug(c.name)).filter(Boolean);
+    // Partner pages are named with both slugs, alphabetically.
+    const candidates = slugs.length > 1
+      ? [[...slugs].sort().join("-"), slugs.join("-")]
+      : slugs;
+
+    for (const slug of candidates) {
+      try {
+        const raw = localStorage.getItem(EDH_CACHE_PREFIX + slug);
+        if (raw) {
+          const hit = JSON.parse(raw);
+          if (hit && hit.t + EDH_CACHE_TTL_MS > Date.now()) return hit.d;
+        }
+      } catch (error) { /* ignore */ }
+
+      try {
+        const response = await fetch(`${EDHREC}/${slug}.json`);
+        if (!response.ok) continue;
+        const stats = slimEdhrec(slug, await response.json());
+        if (!Object.keys(stats.cards).length) continue;
+        try {
+          localStorage.setItem(EDH_CACHE_PREFIX + slug, JSON.stringify({ t: Date.now(), d: stats }));
+        } catch (error) { /* storage full: fine */ }
+        return stats;
+      } catch (error) {
+        // Network or parse error: try the next candidate.
+      }
+    }
+    return null;
+  }
+
+  // EDHREC only lists cards in roughly 5%+ of a commander's decks.
+  function inclusionFor(card, edh) {
+    if (!edh) return null;
+    const hit = edh.cards[nameKey(card.name)];
+    return hit ? { rate: hit[0] / hit[1], decks: hit[0] } : null;
+  }
+
+  function scoreFromInclusion(inclusion, rank) {
+    if (!inclusion) {
+      // Not on the commander's page. Still a touch less spicy if it's a global staple.
+      const global = scoreFromRank(rank);
+      return { category: "Unique Sleepers", points: global.category === "Unique Sleepers" ? 100 : 94 };
+    }
+    const rate = inclusion.rate;
+    if (rate >= 0.4) return { category: "Commander Staples", points: interpolateScore(-rate, -1, -0.4, 1, 27) };
+    if (rate >= 0.2) return { category: "Commander Favorites", points: interpolateScore(-rate, -0.4, -0.2, 28, 49) };
+    if (rate >= 0.1) return { category: "Playables", points: interpolateScore(-rate, -0.2, -0.1, 50, 69) };
+    if (rate >= 0.05) return { category: "Pet Cards", points: interpolateScore(-rate, -0.1, -0.05, 70, 85) };
+    return { category: "Unique Sleepers", points: interpolateScore(-rate, -0.05, 0, 86, 93) };
+  }
+
+  function formatInclusion(inclusion) {
+    if (!inclusion) return "Under 5%";
+    const pct = inclusion.rate * 100;
+    return `${pct >= 10 ? Math.round(pct) : pct.toFixed(1)}%`;
+  }
+
+  function commanderShortName(edh, commanders) {
+    const name = (edh && edh.name) || commanders.map(c => frontFaceName(c.name)).join(" + ");
+    // "Clive, Ifrit's Dominant" -> "Clive"
+    return name.split(" // ").map(part => part.split(",")[0].trim()).join(" + ");
+  }
+
+  function bandFor(score) {
+    return BANDS.find(band => score >= band.lo && score <= band.hi) || BANDS[0];
+  }
+
   function labelForScore(score) {
-    if (score <= 20) return "Netdeck Energy";
-    if (score <= 40) return "Staple Heavy";
-    if (score <= 60) return "Balanced Brew";
-    if (score <= 80) return "Unique Brew";
-    return "Certified Jank Genius";
+    return bandFor(score).name;
   }
 
   function verdictForScore(score) {
@@ -638,8 +776,10 @@ Deck
 
     // One entry per card name; basics and the commander itself aren't scored.
     const seen = new Map();
+    let basicsCount = 0;
     parsed.entries.forEach(entry => {
       const key = nameKey(entry.name);
+      if (BASIC_LANDS.has(key)) basicsCount += entry.quantity;
       if (BASIC_LANDS.has(key) || commanderKeys.has(key)) return;
       if (seen.has(key)) seen.get(key).quantity += entry.quantity;
       else seen.set(key, { ...entry });
@@ -656,9 +796,13 @@ Deck
     els.analyze.disabled = true;
     els.analyze.classList.add("loading");
     setProgress(0.04, "Starting…");
+    startLoader();
 
     try {
-      const resolved = await lookupCards([...commanderEntries, ...entries], (fraction, label) => setProgress(fraction, label));
+      const resolved = await lookupCards([...commanderEntries, ...entries], (fraction, label) => {
+        setProgress(fraction * 0.9, label);
+        setLoaderText(label);
+      });
 
       const commanders = commanderEntries.map(entry => resolved.get(entry)).filter(Boolean);
       const cards = [];
@@ -685,21 +829,63 @@ Deck
       });
 
       if (!cards.length) {
+        stopLoader();
         showFormError("None of those cards were found on Scryfall. Check the list and try again.");
         return;
       }
 
-      if (compareMode === "commanderAware") applyCommanderAwareScores(cards, commanders);
+      // EDHREC data powers same-commander scoring, inclusion rates and the "average deck" in the charts.
+      let edh = null;
+      if (commanders.length) {
+        setProgress(0.93, "Checking decks with your commander on EDHREC…");
+        setLoaderText("Checking decks with your commander on EDHREC…");
+        edh = await fetchCommanderStats(commanders);
+      }
+      cards.forEach(card => { card.inclusion = inclusionFor(card, edh); });
+
+      let mode = compareMode;
+      let modeNotice = "";
+      if (compareMode === "sameCommander") {
+        if (edh) {
+          cards.forEach(card => {
+            const scoring = scoreFromInclusion(card.inclusion, card.edhrec_rank);
+            card.points = scoring.points;
+            card.base_points = scoring.points;
+            card.category = scoring.category;
+          });
+        } else {
+          mode = "global";
+          modeNotice = commanders.length
+            ? `EDHREC doesn't have deck data for ${commanderShortName(null, commanders)} yet, so this uses global ranks instead.`
+            : "Add your commander (or a \"Commander\" section) to compare against decks that use it. This uses global ranks for now.";
+        }
+      } else if (compareMode === "commanderAware") {
+        applyCommanderAwareScores(cards, commanders);
+      }
 
       const fallbackCommanderName = commanderEntries.map(e => frontFaceName(e.name)).join(" + ");
-      renderResults({ cards, missing, commanders, fallbackCommanderName, ...scoreDeck(cards) });
+      const scored = scoreDeck(cards);
+      const historyInfo = recordHistory({
+        commanders, fallbackCommanderName, score: scored.score, mode, cardCount: cards.length,
+        deck: text, commanderInput: els.commander.value.trim(), partnerInput: els.partner.value.trim(), compareMode
+      });
+
+      await revealLoader(cards);
+
+      renderResults({
+        cards, missing, commanders, fallbackCommanderName, basicsCount, edh, mode, modeNotice,
+        delta: historyInfo.delta, ...scored
+      });
 
       setProgress(1, `Done. Scored ${cards.length} cards${missing.length ? `, ${missing.length} not found` : ""}.`);
+      stopLoader();
       els.results.hidden = false;
       requestAnimationFrame(() => els.results.scrollIntoView({ behavior: "smooth", block: "start" }));
       fireConfetti();
+      updateShareHash();
     } catch (error) {
       console.error(error);
+      stopLoader();
       showFormError("Something went wrong talking to Scryfall. Check your connection and try again.");
     } finally {
       els.analyze.disabled = false;
@@ -719,9 +905,17 @@ Deck
     return `<span class="score-badge ${cat.cls}" title="${escapeHtml(card.category)}">${card.points}</span>`;
   }
 
-  function renderResults({ cards, missing, commanders, fallbackCommanderName, score, average, majority }) {
+  function renderResults(result) {
+    const { cards, missing, commanders, fallbackCommanderName, basicsCount, edh, mode, modeNotice, delta, score, average, majority } = result;
     state.cards = cards;
     state.commanders = commanders;
+    state.mode = mode;
+    state.edh = edh;
+    state.result = result;
+    state.shareBlobs = {};
+
+    const sameCommander = mode === "sameCommander";
+    const shortName = commanderShortName(edh, commanders) || fallbackCommanderName;
 
     // Commander hero
     const commander = commanders[0];
@@ -748,15 +942,19 @@ Deck
       $("partnerImg").alt = partner.name;
     }
 
-    let colors = [...new Set(commanders.flatMap(c => c.color_identity || []))];
-    if (!colors.length) colors = [...new Set(cards.flatMap(c => c.color_identity || []))];
+    const colors = deckColors(commanders, cards);
     $("colorPips").querySelectorAll("img").forEach(pip => {
       pip.classList.toggle("off", !colors.includes(pip.dataset.color));
     });
+    applyColorTheme(colors);
 
-    // Score ring
+    // Score ring, colored by score band
+    const band = bandFor(score);
+    const scoreCard = $("scoreHero");
+    scoreCard.style.setProperty("--band", band.color);
+    scoreCard.style.setProperty("--band-2", band.color2);
     $("scoreValue").textContent = score;
-    $("scoreLabel").textContent = labelForScore(score);
+    $("scoreLabel").textContent = band.name;
     const ring = $("ringFg");
     const circumference = 2 * Math.PI * 52;
     ring.style.strokeDasharray = `${circumference}`;
@@ -767,6 +965,17 @@ Deck
     animateNumber($("scoreValue"), score);
     $("verdictText").innerHTML = `<strong>U99 Verdict:</strong> ${escapeHtml(verdictForScore(score))}`;
     $("summaryText").textContent = summaryForScore(score);
+
+    const deltaEl = $("scoreDelta");
+    deltaEl.hidden = !delta;
+    if (delta) {
+      const sign = delta.diff > 0 ? "up" : delta.diff < 0 ? "down" : "same";
+      deltaEl.className = `score-delta ${sign}`;
+      deltaEl.textContent = delta.diff === 0
+        ? `Same as ${delta.when}`
+        : `${delta.diff > 0 ? "▲" : "▼"} ${Math.abs(delta.diff)} since ${delta.when}`;
+      deltaEl.title = `Previous score: ${delta.prev}`;
+    }
 
     // Score equation: average + category bonus = score
     const roundedAvg = Math.round(average);
@@ -781,9 +990,6 @@ Deck
 
     // Stats
     const total = cards.length;
-    const ranked = cards.filter(c => c.edhrec_rank);
-    const avgRank = ranked.length ? Math.round(ranked.reduce((s, c) => s + c.edhrec_rank, 0) / ranked.length) : 0;
-    const avgRankCat = CATEGORY_BY_NAME[scoreFromRank(avgRank).category];
     const share = name => Math.round((majority.counts[name] / total) * 100);
 
     const tile = ({ label, value, unit = "", meter, cls = "", sub }) => `
@@ -794,9 +1000,34 @@ Deck
         <span class="stat-sub">${escapeHtml(sub)}</span>
       </div>`;
 
+    let popularityTile;
+    if (sameCommander) {
+      const avgRate = cards.reduce((sum, c) => sum + (c.inclusion ? c.inclusion.rate : 0), 0) / total;
+      const avgCat = CATEGORY_BY_NAME[scoreFromInclusion(avgRate > 0 ? { rate: avgRate } : null, 0).category];
+      popularityTile = tile({
+        label: `Avg card in ${shortName} decks`,
+        value: `${Math.round(avgRate * 100)}`,
+        unit: "%",
+        meter: avgRate * 100,
+        cls: avgCat.cls,
+        sub: `Across ${edh.numDecks.toLocaleString()} decks on EDHREC`
+      });
+    } else {
+      const ranked = cards.filter(c => c.edhrec_rank);
+      const avgRank = ranked.length ? Math.round(ranked.reduce((s, c) => s + c.edhrec_rank, 0) / ranked.length) : 0;
+      const avgRankCat = CATEGORY_BY_NAME[scoreFromRank(avgRank).category];
+      popularityTile = tile({
+        label: "Avg EDHREC rank",
+        value: avgRank ? `#${avgRank.toLocaleString()}` : "N/A",
+        meter: avgRank ? scoreFromRank(avgRank).points : 0,
+        cls: avgRankCat.cls,
+        sub: avgRank ? `Typical card is a ${avgRankCat.name.replace(/s$/, "")}` : "No ranked cards"
+      });
+    }
+
     $("stats").innerHTML = [
       tile({ label: "Card score average", value: `${roundedAvg}`, unit: "/100", meter: average, cls: "accent", sub: `Bonus ${bonusText} from ${majority.category}` }),
-      tile({ label: "Avg EDHREC rank", value: avgRank ? `#${avgRank.toLocaleString()}` : "N/A", meter: avgRank ? scoreFromRank(avgRank).points : 0, cls: avgRankCat.cls, sub: avgRank ? `Typical card is a ${avgRankCat.name.replace(/s$/, "")}` : "No ranked cards" }),
+      popularityTile,
       tile({ label: "Commander Staples", value: `${share("Commander Staples")}`, unit: "%", meter: share("Commander Staples"), cls: "cat-staples", sub: `${majority.counts["Commander Staples"]} of ${total} cards` }),
       tile({ label: "Unique Sleepers", value: `${share("Unique Sleepers")}`, unit: "%", meter: share("Unique Sleepers"), cls: "cat-sleepers", sub: `${majority.counts["Unique Sleepers"]} of ${total} cards` })
     ].join("") + `
@@ -807,25 +1038,22 @@ Deck
       </div>`;
 
     // Score bands, with the deck's band highlighted
-    const bands = [
-      [0, 20, "Netdeck Energy"],
-      [21, 40, "Staple Heavy"],
-      [41, 60, "Balanced Brew"],
-      [61, 80, "Unique Brew"],
-      [81, 100, "Certified Jank Genius"]
-    ];
-    $("bandList").innerHTML = bands.map(([lo, hi, name]) => {
-      const here = score >= lo && score <= hi;
-      const pos = here ? ((score - lo) / (hi - lo)) * 100 : 0;
+    $("bandList").innerHTML = BANDS.map(b => {
+      const here = b === band;
+      const pos = here ? ((score - b.lo) / (b.hi - b.lo)) * 100 : 0;
       return `
-        <li class="${here ? "current" : ""}">
-          <span class="band-range">${lo}–${hi}</span>
-          <span class="band-name">${name}</span>
+        <li class="${here ? "current" : ""}" style="--band:${b.color}">
+          <span class="band-range">${b.lo}–${b.hi}</span>
+          <span class="band-name">${b.name}</span>
           ${here ? `<span class="band-here">You're here</span><span class="band-marker" style="left:${pos}%"></span>` : ""}
         </li>`;
     }).join("");
 
-    // Missing cards
+    // Notices
+    const modeBox = $("modeNotice");
+    modeBox.hidden = !modeNotice;
+    modeBox.textContent = modeNotice;
+
     const missingBox = $("missingBox");
     missingBox.hidden = !missing.length;
     if (missing.length) {
@@ -836,12 +1064,19 @@ Deck
     }
 
     // Strips
-    const common = [...cards].filter(c => c.edhrec_rank).sort((a, b) => a.edhrec_rank - b.edhrec_rank).slice(0, 5);
-    const unique = [...cards].sort((a, b) => (b.edhrec_rank || 1e9) - (a.edhrec_rank || 1e9)).slice(0, 5);
+    const inclusionRate = card => (card.inclusion ? card.inclusion.rate : 0);
+    const common = sameCommander
+      ? [...cards].filter(c => c.inclusion).sort((a, b) => inclusionRate(b) - inclusionRate(a)).slice(0, 5)
+      : [...cards].filter(c => c.edhrec_rank).sort((a, b) => a.edhrec_rank - b.edhrec_rank).slice(0, 5);
+    const unique = sameCommander
+      ? [...cards].sort((a, b) => inclusionRate(a) - inclusionRate(b) || (b.edhrec_rank || 1e9) - (a.edhrec_rank || 1e9)).slice(0, 5)
+      : [...cards].sort((a, b) => (b.edhrec_rank || 1e9) - (a.edhrec_rank || 1e9)).slice(0, 5);
     renderStrip($("commonStrip"), common);
     renderStrip($("uniqueStrip"), unique);
 
-    $("resultsSub").textContent = `${total} cards scored · ${labelForScore(score)}`;
+    $("resultsSub").textContent = sameCommander
+      ? `vs ${edh.numDecks.toLocaleString()} ${shortName} decks · ${band.name}`
+      : `${total} cards scored · ${band.name}`;
 
     // Deck at a glance: stacked bar + guide table with this deck's counts
     $("glanceSub").textContent = `Most of your deck: ${majority.category}`;
@@ -851,13 +1086,22 @@ Deck
       return `<span class="${c.cls}" style="width:${(count / total) * 100}%" title="${c.name}: ${count}"></span>`;
     }).join("");
 
-    const ranges = {
-      "Commander Staples": ["1–400", "1–27"],
-      "Commander Favorites": ["401–1,000", "28–49"],
-      "Playables": ["1,001–2,000", "50–69"],
-      "Pet Cards": ["2,001–7,000", "70–85"],
-      "Unique Sleepers": ["7,001+", "86–100"]
-    };
+    const ranges = sameCommander
+      ? {
+        "Commander Staples": ["40%+", "1–27"],
+        "Commander Favorites": ["20–40%", "28–49"],
+        "Playables": ["10–20%", "50–69"],
+        "Pet Cards": ["5–10%", "70–85"],
+        "Unique Sleepers": ["Under 5%", "86–100"]
+      }
+      : {
+        "Commander Staples": ["1–400", "1–27"],
+        "Commander Favorites": ["401–1,000", "28–49"],
+        "Playables": ["1,001–2,000", "50–69"],
+        "Pet Cards": ["2,001–7,000", "70–85"],
+        "Unique Sleepers": ["7,001+", "86–100"]
+      };
+    $("guideRankHead").textContent = sameCommander ? `In ${shortName} decks` : "EDHREC rank";
     const maxCount = Math.max(...CATEGORIES.map(c => majority.counts[c.name]), 1);
     $("guideBody").innerHTML = [...CATEGORIES].reverse().map(c => {
       const count = majority.counts[c.name];
@@ -876,6 +1120,8 @@ Deck
         </tr>`;
     }).join("");
 
+    renderCharts(cards, basicsCount, edh, shortName);
+
     resetReportControls();
     renderReport();
   }
@@ -891,7 +1137,7 @@ Deck
         <span class="strip-name">${escapeHtml(frontFaceName(card.name))}</span>
         <span class="strip-meta">
           ${scoreBadge(card)}
-          <span class="strip-rank">${formatRank(card.edhrec_rank)}</span>
+          <span class="strip-rank">${state.mode === "sameCommander" ? `in ${formatInclusion(card.inclusion)}` : formatRank(card.edhrec_rank)}</span>
         </span>
       </button>`).join("");
   }
@@ -975,10 +1221,12 @@ Deck
   }
 
   function renderList(cards) {
+    const showInclusion = Boolean(state.edh);
+    const inclusionHead = showInclusion ? `<th>In ${escapeHtml(commanderShortName(state.edh, state.commanders))} decks</th>` : "";
     return `
       <div class="table-wrap">
         <table class="card-table">
-          <thead><tr><th>Card</th><th>Type</th><th>EDHREC rank</th><th>Category</th><th>Score</th></tr></thead>
+          <thead><tr><th>Card</th><th>Type</th><th>EDHREC rank</th>${inclusionHead}<th>Category</th><th>Score</th></tr></thead>
           <tbody>${cards.map(card => {
             const cat = CATEGORY_BY_NAME[card.category];
             return `
@@ -989,6 +1237,7 @@ Deck
                 </td>
                 <td class="muted">${escapeHtml(cardType(card))}</td>
                 <td>${formatRank(card.edhrec_rank)}</td>
+                ${showInclusion ? `<td>${formatInclusion(card.inclusion)}</td>` : ""}
                 <td><span class="cat-tag"><i class="dot ${cat.cls}"></i>${card.category}</span></td>
                 <td>${scoreBadge(card)}</td>
               </tr>`;
@@ -1038,6 +1287,9 @@ Deck
         </div>`}
       <dl class="modal-facts">
         <div><dt>EDHREC rank</dt><dd>${formatRank(card.edhrec_rank)}</dd></div>
+        ${state.edh && !isCommander ? `<div><dt>With ${escapeHtml(commanderShortName(state.edh, state.commanders))}</dt><dd>${card.inclusion
+          ? `In ${formatInclusion(card.inclusion)} of decks (${card.inclusion.decks.toLocaleString()} of ${state.edh.numDecks.toLocaleString()})`
+          : `In under 5% of ${state.edh.numDecks.toLocaleString()} decks`}</dd></div>` : ""}
         ${card.set_name ? `<div><dt>Printing</dt><dd>${escapeHtml(card.set_name)}</dd></div>` : ""}
         ${card.mode_note ? `<div><dt>Commander-aware</dt><dd>${escapeHtml(card.mode_note)}</dd></div>` : ""}
       </dl>
@@ -1061,6 +1313,769 @@ Deck
     if (x + w > window.innerWidth - 8) x = event.clientX - w - pad;
     y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
     els.hover.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  // ---------- Commander color theme ----------
+
+  function deckColors(commanders, cards) {
+    let colors = [...new Set(commanders.flatMap(c => c.color_identity || []))];
+    if (!colors.length && !commanders.length) colors = [...new Set(cards.flatMap(c => c.color_identity || []))];
+    return ["W", "U", "B", "R", "G"].filter(c => colors.includes(c));
+  }
+
+  function hexToRgba(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+
+  function applyColorTheme(colors) {
+    const root = document.documentElement.style;
+    const list = colors.length ? colors : ["C"];
+    const a = COLOR_THEME[list[0]];
+    const b = COLOR_THEME[list[list.length > 1 ? 1 : 0]];
+    root.setProperty("--accent", a);
+    root.setProperty("--accent-2", b);
+    root.setProperty("--accent-glow", hexToRgba(a, 0.35));
+    root.setProperty("--accent-soft", hexToRgba(a, 0.14));
+    root.setProperty("--accent-line", hexToRgba(a, 0.45));
+    root.setProperty("--accent-2-soft", hexToRgba(b, 0.12));
+  }
+
+  function resetColorTheme() {
+    ["--accent", "--accent-2", "--accent-glow", "--accent-soft", "--accent-line", "--accent-2-soft"]
+      .forEach(prop => document.documentElement.style.removeProperty(prop));
+  }
+
+  // ---------- Loading animation: card backs that flip to your cards ----------
+
+  const LOADER_SLOTS = 7;
+  const LOADER_DEAL_MS = 800; // let every card finish dealing in before any flip
+  let loaderStartedAt = 0;
+
+  function startLoader() {
+    loaderStartedAt = performance.now();
+    els.results.hidden = true;
+    els.loader.hidden = false;
+    $("loaderCards").innerHTML = Array.from({ length: LOADER_SLOTS }, (_, i) => `
+      <div class="flip-card" style="--i:${i}">
+        <div class="flip-inner">
+          <div class="flip-back"><img src="assets/u99-logo.webp" alt="" /></div>
+          <div class="flip-front"></div>
+        </div>
+      </div>`).join("");
+    setLoaderText("Looking up your cards…");
+    requestAnimationFrame(() => els.loader.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
+
+  function setLoaderText(text) {
+    if (text) $("loaderText").textContent = text;
+  }
+
+  function preload(src, timeout = 2500) {
+    return new Promise(resolve => {
+      const img = new Image();
+      const done = () => resolve(img);
+      img.onload = done;
+      img.onerror = done;
+      setTimeout(done, timeout);
+      img.src = src;
+    });
+  }
+
+  async function revealLoader(cards) {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const withImages = cards.filter(card => imgFor(card, "normal"));
+    // Lead with the deepest cuts so the reveal shows off the spiciest cards.
+    const picks = [...withImages].sort((a, b) => b.points - a.points).slice(0, LOADER_SLOTS * 2);
+    for (let i = picks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [picks[i], picks[j]] = [picks[j], picks[i]];
+    }
+    const chosen = picks.slice(0, LOADER_SLOTS);
+    if (!chosen.length || reduced) return;
+
+    setLoaderText("Revealing your deck…");
+    await Promise.all(chosen.map(card => preload(imgFor(card, "normal"))));
+    await sleep(Math.max(0, loaderStartedAt + LOADER_DEAL_MS - performance.now()));
+    const slots = [...$("loaderCards").querySelectorAll(".flip-card")];
+    slots.forEach((slot, i) => {
+      const card = chosen[i % chosen.length];
+      slot.querySelector(".flip-front").innerHTML = `<img src="${imgFor(card, "normal")}" alt="" />`;
+      setTimeout(() => slot.classList.add("flipped"), i * 110);
+    });
+    await sleep(LOADER_SLOTS * 110 + 750);
+  }
+
+  function stopLoader() {
+    els.loader.hidden = true;
+    $("loaderCards").innerHTML = "";
+  }
+
+  // ---------- Deck stats charts ----------
+
+  const CURVE_BUCKETS = ["0", "1", "2", "3", "4", "5", "6", "7+"];
+  const TYPE_ROWS = [
+    ["Creatures", "Creature"],
+    ["Instants", "Instant"],
+    ["Sorceries", "Sorcery"],
+    ["Artifacts", "Artifact"],
+    ["Enchantments", "Enchantment"],
+    ["Planeswalkers", "Planeswalker"],
+    ["Battles", "Battle"],
+    ["Lands", "Land"]
+  ];
+
+  function curveBucket(cmc) {
+    const value = Math.floor(cmc || 0);
+    return value >= 7 ? "7+" : String(value);
+  }
+
+  function renderCharts(cards, basicsCount, edh, shortName) {
+    const hasAvg = Boolean(edh && edh.curve);
+    $("chartLegend").innerHTML = hasAvg
+      ? `<span><i class="key key-you"></i>Your deck</span><span><i class="key key-avg"></i>Avg ${escapeHtml(shortName)} deck</span>`
+      : "";
+
+    // Mana curve (nonland cards, by quantity)
+    const you = Object.fromEntries(CURVE_BUCKETS.map(b => [b, 0]));
+    cards.forEach(card => {
+      if (cardType(card) === "Lands") return;
+      you[curveBucket(card.cmc)] += card.quantity || 1;
+    });
+    const avg = Object.fromEntries(CURVE_BUCKETS.map(b => [b, 0]));
+    if (hasAvg) {
+      Object.entries(edh.curve).forEach(([mv, count]) => { avg[curveBucket(Number(mv))] += count; });
+    }
+    $("curveChart").innerHTML = curveSvg(you, hasAvg ? avg : null, shortName);
+
+    // Card types (by quantity, basics counted as lands)
+    const typeYou = Object.fromEntries(TYPE_ROWS.map(([plural]) => [plural, 0]));
+    cards.forEach(card => {
+      const type = cardType(card);
+      if (type in typeYou) typeYou[type] += card.quantity || 1;
+    });
+    typeYou.Lands += basicsCount || 0;
+    const typeAvg = edh && edh.types && Object.keys(edh.types).length ? edh.types : null;
+    const rows = TYPE_ROWS.filter(([plural, singular]) => typeYou[plural] || (typeAvg && typeAvg[singular]));
+    const max = Math.max(1, ...rows.map(([plural, singular]) => Math.max(typeYou[plural], typeAvg ? (typeAvg[singular] || 0) : 0)));
+    $("typeChart").innerHTML = `<div class="hbars">${rows.map(([plural, singular]) => {
+      const mine = typeYou[plural];
+      const theirs = typeAvg ? (typeAvg[singular] || 0) : null;
+      const tip = theirs === null ? `${plural}: ${mine}` : `${plural}: ${mine} in your deck · ${theirs} in the avg ${shortName} deck`;
+      return `
+        <div class="hbar-row" data-tip="${escapeHtml(tip)}">
+          <span class="hbar-label">${plural}</span>
+          <span class="hbar-track">
+            <span class="hbar-fill" style="width:${(mine / max) * 100}%"></span>
+            ${theirs !== null ? `<span class="hbar-avg" style="left:${(theirs / max) * 100}%"></span>` : ""}
+          </span>
+          <span class="hbar-value">${mine}</span>
+        </div>`;
+    }).join("")}</div>`;
+  }
+
+  function curveSvg(you, avg, shortName) {
+    const W = 320;
+    const H = 170;
+    const top = 18;
+    const bottom = 24;
+    const plotH = H - top - bottom;
+    const slot = W / CURVE_BUCKETS.length;
+    const barW = Math.min(24, slot - 12);
+    const max = Math.max(1, ...CURVE_BUCKETS.map(b => Math.max(you[b], avg ? avg[b] : 0)));
+    const y = v => top + plotH - (v / max) * plotH;
+    const r = 4;
+
+    const parts = CURVE_BUCKETS.map((b, i) => {
+      const cx = slot * i + slot / 2;
+      const x = cx - barW / 2;
+      const h = (you[b] / max) * plotH;
+      const yTop = top + plotH - h;
+      const rr = Math.min(r, h);
+      const bar = h > 0
+        ? `<path class="curve-bar" d="M${x},${top + plotH} V${yTop + rr} Q${x},${yTop} ${x + rr},${yTop} H${x + barW - rr} Q${x + barW},${yTop} ${x + barW},${yTop + rr} V${top + plotH} Z" />`
+        : "";
+      // Keep the count clear of the average marker when that sits above the bar.
+      const labelY = Math.min(yTop, avg && avg[b] ? y(avg[b]) : yTop) - 6;
+      const capLabel = you[b] ? `<text class="curve-cap" x="${cx}" y="${labelY}">${you[b]}</text>` : "";
+      const avgMark = avg && avg[b]
+        ? `<line class="curve-avg" x1="${cx - barW / 2 - 5}" x2="${cx + barW / 2 + 5}" y1="${y(avg[b])}" y2="${y(avg[b])}" />`
+        : "";
+      const tip = avg
+        ? `Mana value ${b}: ${you[b]} in your deck · ${avg[b]} in the avg ${shortName} deck`
+        : `Mana value ${b}: ${you[b]} card${you[b] === 1 ? "" : "s"}`;
+      return `
+        <g class="curve-slot" data-tip="${escapeHtml(tip)}">
+          <rect class="hit" x="${slot * i}" y="0" width="${slot}" height="${H}" />
+          ${bar}${avgMark}${capLabel}
+          <text class="curve-x" x="${cx}" y="${H - 6}">${b}</text>
+        </g>`;
+    }).join("");
+
+    return `<svg class="curve-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Mana curve">
+      <line class="baseline" x1="0" x2="${W}" y1="${top + plotH}" y2="${top + plotH}" />
+      ${parts}
+    </svg>`;
+  }
+
+  function showChartTip(event) {
+    const target = event.target.closest("[data-tip]");
+    const tip = $("chartTip");
+    if (!target || !canHover) {
+      tip.hidden = true;
+      return;
+    }
+    tip.textContent = target.dataset.tip;
+    tip.hidden = false;
+    const pad = 14;
+    let x = event.clientX + pad;
+    const width = tip.offsetWidth;
+    if (x + width > window.innerWidth - 8) x = event.clientX - width - pad;
+    tip.style.transform = `translate(${x}px, ${event.clientY + pad}px)`;
+  }
+
+  // ---------- Deck history (this browser only) ----------
+
+  function hashString(text) {
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  function loadHistory() {
+    try {
+      const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveHistory(list) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX)));
+    } catch (error) { /* ignore */ }
+  }
+
+  function timeAgo(ts) {
+    const mins = Math.round((Date.now() - ts) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.round(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  // Saves this analysis and returns the change since the last different version of the same deck.
+  function recordHistory({ commanders, fallbackCommanderName, score, mode, cardCount, deck, commanderInput, partnerInput, compareMode }) {
+    const commanderName = commanders.length ? commanders.map(c => frontFaceName(c.name)).join(" + ") : (fallbackCommanderName || "Unknown commander");
+    const id = hashString(`${deck}|${commanderInput}|${partnerInput}|${compareMode}`);
+    const list = loadHistory();
+
+    const previous = list.find(item => item.id !== id && item.commander === commanderName && item.mode === mode);
+    const delta = previous
+      ? { diff: score - previous.score, prev: previous.score, when: timeAgo(previous.at) }
+      : null;
+
+    const entry = {
+      id,
+      at: Date.now(),
+      commander: commanderName,
+      art: commanders[0] ? imgFor(commanders[0], "art") : "",
+      score,
+      mode,
+      compareMode,
+      cardCount,
+      deck,
+      commanderInput,
+      partnerInput
+    };
+    saveHistory([entry, ...list.filter(item => item.id !== id)]);
+    renderHistory();
+    return { delta };
+  }
+
+  const MODE_LABELS = { global: "All decks", sameCommander: "Same commander", commanderAware: "Commander-aware" };
+
+  function renderHistory() {
+    const list = loadHistory();
+    $("history").hidden = !list.length;
+    $("historyList").innerHTML = list.slice(0, 6).map(item => {
+      const band = bandFor(item.score);
+      return `
+        <div class="history-item" style="--band:${band.color}">
+          <button type="button" class="history-load" data-id="${item.id}" title="Analyze this deck again">
+            <span class="history-art" style="${item.art ? `background-image:url('${escapeHtml(item.art)}')` : ""}"></span>
+            <span class="history-text">
+              <strong>${escapeHtml(item.commander)}</strong>
+              <em>${escapeHtml(MODE_LABELS[item.mode] || "All decks")} · ${item.cardCount} cards · ${timeAgo(item.at)}</em>
+            </span>
+            <span class="history-score">${item.score}</span>
+          </button>
+          <button type="button" class="history-remove" data-remove="${item.id}" aria-label="Remove from recent decks">×</button>
+        </div>`;
+    }).join("");
+  }
+
+  function loadDeckIntoForm({ deck, commanderInput = "", partnerInput = "", compareMode = "global" }) {
+    els.deck.value = deck || "";
+    els.commander.value = commanderInput;
+    els.partner.value = partnerInput;
+    const radio = document.querySelector(`input[name="compareMode"][value="${compareMode}"]`);
+    if (radio) radio.checked = true;
+    updateLineCount();
+  }
+
+  // ---------- Share links ----------
+
+  function toBase64Url(bytes) {
+    let binary = "";
+    bytes.forEach(b => { binary += String.fromCharCode(b); });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function fromBase64Url(text) {
+    const binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(binary, ch => ch.charCodeAt(0));
+  }
+
+  async function encodeShare(payload) {
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    if ("CompressionStream" in window) {
+      const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+      return `z${toBase64Url(new Uint8Array(await new Response(stream).arrayBuffer()))}`;
+    }
+    return `j${toBase64Url(bytes)}`;
+  }
+
+  async function decodeShare(code) {
+    const kind = code[0];
+    let bytes = fromBase64Url(code.slice(1));
+    if (kind === "z") {
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  async function currentShareUrl() {
+    const compareMode = document.querySelector('input[name="compareMode"]:checked')?.value || "global";
+    const code = await encodeShare({
+      d: els.deck.value.trim(),
+      c: els.commander.value.trim(),
+      p: els.partner.value.trim(),
+      m: compareMode
+    });
+    return `${location.origin}${location.pathname}#d=${code}`;
+  }
+
+  async function updateShareHash() {
+    try {
+      const url = await currentShareUrl();
+      history.replaceState(null, "", url);
+    } catch (error) { /* sharing is optional */ }
+  }
+
+  async function copyShareLink() {
+    try {
+      const url = await currentShareUrl();
+      await navigator.clipboard.writeText(url);
+      toast("Link copied. Anyone who opens it sees these results.");
+    } catch (error) {
+      toast("Couldn't copy automatically. Copy the address bar instead.");
+    }
+  }
+
+  async function loadFromHash() {
+    const match = location.hash.match(/^#d=([\w-]+)/);
+    if (!match) return;
+    try {
+      const data = await decodeShare(match[1]);
+      if (!data || !data.d) return;
+      loadDeckIntoForm({ deck: data.d, commanderInput: data.c || "", partnerInput: data.p || "", compareMode: data.m || "global" });
+      analyzeDeck();
+    } catch (error) {
+      showFormError("That share link looks broken or incomplete.");
+    }
+  }
+
+  let toastTimer = null;
+  function toast(message) {
+    const el = $("toast");
+    el.textContent = message;
+    el.hidden = false;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(() => { el.hidden = true; }, 250);
+    }, 2600);
+  }
+
+  // ---------- Share images (post 4:5, story 9:16) and PDF ----------
+
+  const TEMPLATES = {
+    post: { w: 1080, h: 1350 },
+    story: { w: 1080, h: 1920 }
+  };
+
+  function loadCanvasImage(src) {
+    return new Promise(resolve => {
+      if (!src) return resolve(null);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      const timer = setTimeout(() => resolve(null), 6000);
+      img.onload = () => { clearTimeout(timer); resolve(img); };
+      img.onerror = () => { clearTimeout(timer); resolve(null); };
+      // Separate cache entry so the browser makes a CORS request for this copy.
+      img.src = src.startsWith("http") ? `${src}${src.includes("?") ? "&" : "?"}u99canvas=1` : src;
+    });
+  }
+
+  function drawCover(ctx, img, x, y, w, h, focusY = 0.3) {
+    const scale = Math.max(w / img.width, h / img.height);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = (img.width - sw) / 2;
+    const sy = Math.max(0, Math.min(img.height - sh, (img.height - sh) * focusY));
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+  }
+
+  function fitText(ctx, text, maxWidth, size, weight, family) {
+    let s = size;
+    ctx.font = `${weight} ${s}px ${family}`;
+    while (ctx.measureText(text).width > maxWidth && s > 20) {
+      s -= 2;
+      ctx.font = `${weight} ${s}px ${family}`;
+    }
+    return s;
+  }
+
+  async function renderShareCanvas(template) {
+    const result = state.result;
+    const { w: W, h: H } = TEMPLATES[template];
+    const story = template === "story";
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    const display = '"Space Grotesk", "Segoe UI", sans-serif';
+    const body = 'Inter, "Segoe UI", sans-serif';
+    try {
+      await Promise.all([
+        document.fonts.load(`700 120px "Space Grotesk"`),
+        document.fonts.load(`600 40px Inter`),
+        document.fonts.load(`500 40px Inter`)
+      ]);
+    } catch (error) { /* fall back to system fonts */ }
+
+    const band = bandFor(result.score);
+    const colors = deckColors(result.commanders, result.cards);
+    const accent = COLOR_THEME[(colors[0] || "C")];
+    const commander = result.commanders[0];
+    const uniqueCards = [...result.cards]
+      .filter(card => imgFor(card, "normal"))
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 4);
+
+    const [art, logo, cmdImg, ...cardImgs] = await Promise.all([
+      loadCanvasImage(commander ? imgFor(commander, "art") : ""),
+      loadCanvasImage("assets/u99-logo.webp"),
+      loadCanvasImage(commander ? imgFor(commander, "normal") : ""),
+      ...uniqueCards.map(card => loadCanvasImage(imgFor(card, "normal")))
+    ]);
+    const pipImgs = await Promise.all(colors.map(c => loadCanvasImage(`assets/mana-${c.toLowerCase()}.png`)));
+
+    // Background: commander art fading into the page color
+    ctx.fillStyle = "#060912";
+    ctx.fillRect(0, 0, W, H);
+    const artH = story ? 1100 : 820;
+    if (art) {
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      drawCover(ctx, art, 0, 0, W, artH, 0.25);
+      ctx.restore();
+    }
+    const fade = ctx.createLinearGradient(0, 0, 0, artH);
+    fade.addColorStop(0, "rgba(6,9,18,0.55)");
+    fade.addColorStop(0.55, "rgba(6,9,18,0.8)");
+    fade.addColorStop(1, "rgba(6,9,18,1)");
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, W, artH);
+    const glow = ctx.createRadialGradient(W / 2, story ? 700 : 500, 40, W / 2, story ? 700 : 500, 620);
+    glow.addColorStop(0, hexToRgba(band.color, 0.28));
+    glow.addColorStop(1, "rgba(6,9,18,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Header: logo + wordmark
+    const pad = 64;
+    if (logo) {
+      ctx.save();
+      roundRectPath(ctx, pad, pad, 76, 76, 20);
+      ctx.clip();
+      ctx.drawImage(logo, pad, pad, 76, 76);
+      ctx.restore();
+    }
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#eef2f8";
+    ctx.font = `700 40px ${display}`;
+    ctx.fillText("Unique 99", pad + 96, pad + 38);
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = `500 24px ${body}`;
+    ctx.fillText("Commander Deck Uniqueness Score", pad + 96, pad + 70);
+
+    // Commander card, top right
+    if (cmdImg) {
+      const cw = story ? 210 : 170;
+      const ch = cw * 680 / 488;
+      ctx.save();
+      ctx.translate(W - pad - cw / 2, pad + ch / 2 - 10);
+      ctx.rotate(0.06);
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = 30;
+      roundRectPath(ctx, -cw / 2, -ch / 2, cw, ch, cw * 0.045);
+      ctx.fillStyle = "#000";
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.clip();
+      ctx.drawImage(cmdImg, -cw / 2, -ch / 2, cw, ch);
+      ctx.restore();
+    }
+
+    // Score ring
+    const cx = W / 2;
+    const cy = story ? 680 : 420;
+    const radius = story ? 230 : 170;
+    const lineW = story ? 30 : 26;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(2,6,14,0.75)";
+    ctx.fill();
+    ctx.lineWidth = lineW;
+    ctx.strokeStyle = "rgba(148,163,184,0.18)";
+    ctx.stroke();
+    const ringGrad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    ringGrad.addColorStop(0, band.color2);
+    ringGrad.addColorStop(1, band.color);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (result.score / 100));
+    ctx.strokeStyle = ringGrad;
+    ctx.lineCap = "round";
+    ctx.shadowColor = hexToRgba(band.color, 0.6);
+    ctx.shadowBlur = 24;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `700 ${story ? 190 : 146}px ${display}`;
+    ctx.fillText(String(result.score), cx, cy + (story ? 62 : 46));
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = `500 ${story ? 32 : 28}px ${body}`;
+    ctx.fillText("out of 100", cx, cy + (story ? 118 : 92));
+
+    // Band label pill
+    let y = cy + radius + (story ? 90 : 70);
+    ctx.font = `700 ${story ? 46 : 40}px ${display}`;
+    const labelW = ctx.measureText(band.name).width + 64;
+    const pillH = story ? 76 : 66;
+    roundRectPath(ctx, cx - labelW / 2, y - pillH / 2 - 14, labelW, pillH, pillH / 2);
+    ctx.fillStyle = hexToRgba(band.color, 0.2);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = hexToRgba(band.color, 0.7);
+    ctx.stroke();
+    ctx.fillStyle = band.color2;
+    ctx.fillText(band.name, cx, y + 2);
+
+    // Commander name + pips + comparison line
+    y += story ? 116 : 84;
+    const name = result.commanders.length
+      ? result.commanders.map(c => frontFaceName(c.name)).join(" + ")
+      : (result.fallbackCommanderName || "My Commander deck");
+    const nameSize = fitText(ctx, name, W - pad * 2, story ? 60 : 52, 700, display);
+    ctx.fillStyle = "#eef2f8";
+    ctx.font = `700 ${nameSize}px ${display}`;
+    ctx.fillText(name, cx, y);
+
+    y += story ? 58 : 46;
+    const pip = story ? 40 : 34;
+    const pipGap = 10;
+    const loadedPips = pipImgs.filter(Boolean);
+    const compareText = result.mode === "sameCommander" && result.edh
+      ? `vs ${result.edh.numDecks.toLocaleString()} ${commanderShortName(result.edh, result.commanders)} decks on EDHREC`
+      : "vs all Commander decks";
+    ctx.font = `500 ${story ? 30 : 26}px ${body}`;
+    const compareW = ctx.measureText(compareText).width;
+    const pipsW = loadedPips.length ? loadedPips.length * (pip + pipGap) + 8 : 0;
+    let x = cx - (pipsW + compareW) / 2;
+    loadedPips.forEach(img => {
+      ctx.drawImage(img, x, y - pip + 8, pip, pip);
+      x += pip + pipGap;
+    });
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(compareText, x + (loadedPips.length ? 8 : 0), y);
+    ctx.textAlign = "center";
+
+    // Stat boxes
+    y += story ? 64 : 40;
+    const counts = result.majority.counts;
+    const total = result.cards.length;
+    const stats = [
+      [String(Math.round(result.average)), "Card score avg"],
+      [`${Math.round((counts["Commander Staples"] / total) * 100)}%`, "Commander Staples"],
+      [`${Math.round((counts["Unique Sleepers"] / total) * 100)}%`, "Unique Sleepers"]
+    ];
+    const gap = 20;
+    const boxW = (W - pad * 2 - gap * 2) / 3;
+    const boxH = story ? 150 : 120;
+    stats.forEach(([value, label], i) => {
+      const bx = pad + i * (boxW + gap);
+      roundRectPath(ctx, bx, y, boxW, boxH, 22);
+      ctx.fillStyle = "rgba(15,22,38,0.85)";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(148,163,184,0.2)";
+      ctx.stroke();
+      ctx.fillStyle = "#eef2f8";
+      ctx.font = `700 ${story ? 60 : 52}px ${display}`;
+      ctx.fillText(value, bx + boxW / 2, y + boxH / 2 + (story ? 10 : 8));
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = `500 ${story ? 26 : 22}px ${body}`;
+      ctx.fillText(label, bx + boxW / 2, y + boxH - (story ? 26 : 20));
+    });
+
+    // Deepest cuts
+    y += boxH + (story ? 76 : 50);
+    const cardsLoaded = cardImgs.map((img, i) => [img, uniqueCards[i]]).filter(([img]) => img);
+    if (cardsLoaded.length) {
+      ctx.fillStyle = accent;
+      ctx.font = `700 ${story ? 28 : 24}px ${body}`;
+      ctx.fillText("DEEPEST CUTS", cx, y);
+      y += story ? 30 : 24;
+      const cardGap = 18;
+      const cw = story ? 200 : 170;
+      const ch = cw * 680 / 488;
+      const startX = cx - (cardsLoaded.length * cw + (cardsLoaded.length - 1) * cardGap) / 2;
+      cardsLoaded.forEach(([img, card], i) => {
+        const bx = startX + i * (cw + cardGap);
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.55)";
+        ctx.shadowBlur = 24;
+        roundRectPath(ctx, bx, y, cw, ch, cw * 0.045);
+        ctx.fillStyle = "#000";
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.clip();
+        ctx.drawImage(img, bx, y, cw, ch);
+        ctx.restore();
+        // Score badge
+        const cat = CATEGORY_BY_NAME[card.category];
+        const badgeColor = getComputedStyle(document.documentElement).getPropertyValue(`--${cat.cls}`).trim() || "#fbbf24";
+        roundRectPath(ctx, bx + cw - 70, y - 14, 80, 46, 12);
+        ctx.fillStyle = badgeColor;
+        ctx.fill();
+        ctx.fillStyle = "#06101f";
+        ctx.font = `700 28px ${display}`;
+        ctx.fillText(String(card.points), bx + cw - 30, y + 19);
+      });
+    }
+
+    // Footer
+    ctx.fillStyle = "#64748b";
+    ctx.font = `500 ${story ? 28 : 24}px ${body}`;
+    ctx.fillText(`Score your deck at ${SITE_URL}`, cx, H - (story ? 60 : 40));
+
+    return canvas;
+  }
+
+  function selectedTemplate() {
+    return document.querySelector('input[name="shareTemplate"]:checked')?.value || "post";
+  }
+
+  async function refreshSharePreview() {
+    const template = selectedTemplate();
+    const preview = $("sharePreview");
+    preview.classList.toggle("story", template === "story");
+    if (!state.shareBlobs[template]) {
+      $("shareRendering").hidden = false;
+      const canvas = await renderShareCanvas(template);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      state.shareBlobs[template] = { blob, url: URL.createObjectURL(blob), canvas };
+    }
+    $("shareRendering").hidden = true;
+    preview.src = state.shareBlobs[template].url;
+
+    const file = new File([state.shareBlobs[template].blob], shareFileName("png"), { type: "image/png" });
+    $("nativeShare").hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
+  }
+
+  function shareFileName(ext) {
+    const slug = edhrecSlug(state.commanders[0] ? state.commanders[0].name : "deck") || "deck";
+    return `unique99-${slug}-${state.result.score}-${selectedTemplate()}.${ext}`;
+  }
+
+  async function openShareModal() {
+    if (!state.result) return;
+    if (typeof els.shareModal.showModal === "function") els.shareModal.showModal();
+    else els.shareModal.setAttribute("open", "");
+    await refreshSharePreview();
+  }
+
+  function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  let jsPdfPromise = null;
+  function loadJsPdf() {
+    if (window.jspdf) return Promise.resolve(window.jspdf);
+    if (!jsPdfPromise) {
+      jsPdfPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        script.onload = () => resolve(window.jspdf);
+        script.onerror = () => { jsPdfPromise = null; reject(new Error("jsPDF failed to load")); };
+        document.head.appendChild(script);
+      });
+    }
+    return jsPdfPromise;
+  }
+
+  async function downloadPdf() {
+    const button = $("downloadPdf");
+    button.disabled = true;
+    try {
+      await refreshSharePreview();
+      const { jsPDF } = await loadJsPdf();
+      const { canvas } = state.shareBlobs[selectedTemplate()];
+      const { w, h } = TEMPLATES[selectedTemplate()];
+      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [w, h], hotfixes: ["px_scaling"] });
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, w, h);
+      pdf.save(shareFileName("pdf"));
+    } catch (error) {
+      toast("Couldn't build the PDF. Try downloading the image instead.");
+    } finally {
+      button.disabled = false;
+    }
   }
 
   // ---------- Confetti & small effects ----------
@@ -1117,6 +2132,8 @@ Deck
     els.progress.hidden = true;
     showFormError("");
     document.body.style.setProperty("--backdrop-image", "none");
+    resetColorTheme();
+    history.replaceState(null, "", location.pathname);
     updateLineCount();
     els.deck.focus();
   });
@@ -1210,5 +2227,55 @@ Deck
     if (event.target === els.modal) closeModal();
   });
 
+  // Chart tooltips
+  document.querySelector(".charts").addEventListener("mousemove", showChartTip);
+  document.querySelector(".charts").addEventListener("mouseleave", () => { $("chartTip").hidden = true; });
+
+  // Recent decks
+  $("historyList").addEventListener("click", event => {
+    const remove = event.target.closest("[data-remove]");
+    if (remove) {
+      saveHistory(loadHistory().filter(item => item.id !== remove.dataset.remove));
+      renderHistory();
+      return;
+    }
+    const load = event.target.closest("[data-id]");
+    if (!load) return;
+    const item = loadHistory().find(entry => entry.id === load.dataset.id);
+    if (!item) return;
+    loadDeckIntoForm(item);
+    analyzeDeck();
+  });
+  $("historyClear").addEventListener("click", () => {
+    saveHistory([]);
+    renderHistory();
+  });
+
+  // Sharing
+  $("shareBtn").addEventListener("click", openShareModal);
+  $("copyLinkBtn").addEventListener("click", copyShareLink);
+  $("shareCopyLink").addEventListener("click", copyShareLink);
+  $("shareClose").addEventListener("click", () => els.shareModal.close());
+  els.shareModal.addEventListener("click", event => {
+    if (event.target === els.shareModal) els.shareModal.close();
+  });
+  document.querySelectorAll('input[name="shareTemplate"]').forEach(radio => {
+    radio.addEventListener("change", refreshSharePreview);
+  });
+  $("downloadPng").addEventListener("click", async () => {
+    await refreshSharePreview();
+    downloadBlob(state.shareBlobs[selectedTemplate()].blob, shareFileName("png"));
+  });
+  $("downloadPdf").addEventListener("click", downloadPdf);
+  $("nativeShare").addEventListener("click", async () => {
+    const { blob } = state.shareBlobs[selectedTemplate()];
+    const file = new File([blob], shareFileName("png"), { type: "image/png" });
+    try {
+      await navigator.share({ files: [file], title: "My Unique 99 score", url: await currentShareUrl() });
+    } catch (error) { /* user cancelled */ }
+  });
+
   updateLineCount();
+  renderHistory();
+  loadFromHash();
 })();

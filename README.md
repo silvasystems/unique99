@@ -40,7 +40,27 @@ Only cards that still can't be matched are listed as "not found."
 
 Deck score = rounded average card score + the bonus for the most common category. Cards with no EDHREC rank score 100.
 
+**Same commander mode** scores each card by how often it appears in decks with your commander, using EDHREC's public commander data (`json.edhrec.com/pages/commanders/<slug>.json`, fetched straight from the browser). Partner pairs use the combined page.
+
+| Category            | In your commander's decks | Card score |
+| ------------------- | ------------------------- | ---------- |
+| Commander Staples   | 40%+                      | 1–27       |
+| Commander Favorites | 20–40%                    | 28–49      |
+| Playables           | 10–20%                    | 50–69      |
+| Pet Cards           | 5–10%                     | 70–85      |
+| Unique Sleepers     | under 5%                  | 86–100     |
+
+EDHREC only lists cards in about 5% or more of a commander's decks, so unlisted cards are Unique Sleepers: 100, or 94 if the card is a global staple. If EDHREC has no page for the commander, scoring falls back to global ranks and says so.
+
 **Commander-aware mode** (experimental) adds up to +10 for cards that match the deck's detected themes, plus +2 for staying in the commander's colors.
+
+## Other features
+
+- **Deck stats:** a mana curve and card type chart, compared with EDHREC's average deck for your commander when that data exists.
+- **Score colors and themes:** the score ring changes color by score band, and the page accent follows your commander's colors.
+- **Recent decks:** the last analyses are saved in `localStorage`. Re-analyzing an edited version of a deck shows how much the score changed.
+- **Share links:** the decklist, commanders, and mode are compressed into the URL hash (`#d=…`), so the link reproduces the results with no server.
+- **Share images:** a 4:5 post or 9:16 story image is drawn on a canvas, downloadable as PNG or PDF (jsPDF is loaded from cdnjs only when needed).
 
 ## Running locally
 
@@ -57,6 +77,13 @@ npx http-server . -p 5199
 - Output directory: leave empty or `.`
 
 ## Changelog
+
+### v2.1 — same-commander scoring, sharing, history
+
+- Added "Same commander" compare mode using EDHREC commander data, with per-card "played in X% of decks" info.
+- Added share links, post/story share images, and PDF export.
+- Added recent decks with score change tracking.
+- Added mana curve and card type charts, score band colors, commander color themes, and a card-flip loading animation.
 
 ### v2.0 — lookup fix + UI overhaul
 

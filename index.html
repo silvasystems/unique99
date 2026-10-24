@@ -38,22 +38,34 @@
 
         <ol class="steps">
           <li><strong>Paste</strong><span>Moxfield, Archidekt, MTGO, or plain text</span></li>
-          <li><strong>Score</strong><span>Every card is rated from its EDHREC rank</span></li>
-          <li><strong>Explore</strong><span>Browse your deck as cards, sorted and filtered</span></li>
+          <li><strong>Score</strong><span>Against every Commander deck, or just ones with your commander</span></li>
+          <li><strong>Share</strong><span>Post your score, or come back and track your changes</span></li>
         </ol>
 
+        <div class="history" id="history" hidden>
+          <div class="history-head">
+            <span class="field-label">Recent decks</span>
+            <button type="button" class="link-btn" id="historyClear">Clear all</button>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </div>
+
         <p class="fine-print">
-          Scores compare each card against overall Commander popularity (Scryfall's EDHREC rank). They don't yet compare against other decks with the same commander.
+          Card popularity comes from EDHREC, via Scryfall's global ranks and EDHREC's per-commander deck data. Recent decks are saved only in this browser.
         </p>
       </div>
 
       <form class="panel input-panel" id="deckForm" autocomplete="off">
         <div class="field">
           <span class="field-label">Compare mode</span>
-          <div class="segmented" role="radiogroup" aria-label="Compare mode">
+          <div class="segmented three" role="radiogroup" aria-label="Compare mode">
             <label>
               <input type="radio" name="compareMode" value="global" checked />
-              <span><strong>All Commander decks</strong><em>Global EDHREC rank</em></span>
+              <span><strong>All decks</strong><em>Global EDHREC rank</em></span>
+            </label>
+            <label>
+              <input type="radio" name="compareMode" value="sameCommander" />
+              <span><strong>Same commander</strong><em>vs. decks with your commander</em></span>
             </label>
             <label>
               <input type="radio" name="compareMode" value="commanderAware" />
@@ -102,6 +114,14 @@
       </form>
     </section>
 
+    <section class="loader" id="loader" hidden aria-live="polite">
+      <div class="section-divider">
+        <span class="divider-label">Shuffling up</span>
+      </div>
+      <div class="loader-cards" id="loaderCards"></div>
+      <p class="loader-text" id="loaderText">Looking up your cards…</p>
+    </section>
+
     <section class="results" id="results" hidden>
       <div class="section-divider">
         <span class="divider-label">Your results</span>
@@ -136,9 +156,8 @@
               <svg viewBox="0 0 120 120" aria-hidden="true">
                 <defs>
                   <linearGradient id="ringGradient" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#93c5fd" />
-                    <stop offset="55%" stop-color="#60a5fa" />
-                    <stop offset="100%" stop-color="#a78bfa" />
+                    <stop offset="0%" style="stop-color: var(--band-2, #93c5fd)" />
+                    <stop offset="100%" style="stop-color: var(--band, #60a5fa)" />
                   </linearGradient>
                 </defs>
                 <circle class="ring-bg" cx="60" cy="60" r="52" />
@@ -150,9 +169,14 @@
               </div>
             </div>
             <span class="score-label" id="scoreLabel"></span>
+            <span class="score-delta" id="scoreDelta" hidden></span>
             <div class="equation" id="scoreEquation"></div>
             <p class="summary" id="summaryText"></p>
             <p class="verdict" id="verdictText"></p>
+            <div class="share-row">
+              <button type="button" class="btn btn-primary btn-small" id="shareBtn">Share score</button>
+              <button type="button" class="btn btn-small" id="copyLinkBtn">Copy link</button>
+            </div>
           </div>
 
           <div class="stats" id="stats"></div>
@@ -164,6 +188,8 @@
         </aside>
 
         <div class="glance">
+          <div class="notice notice-info" id="modeNotice" hidden></div>
+
           <section class="panel">
             <header class="panel-head">
               <h3>Deck at a glance</h3>
@@ -173,7 +199,7 @@
             <div class="table-wrap">
               <table class="guide-table">
                 <thead>
-                  <tr><th>Category</th><th>EDHREC rank</th><th>Card score</th><th>Bonus</th><th class="your-col">Your deck</th></tr>
+                  <tr><th>Category</th><th id="guideRankHead">EDHREC rank</th><th>Card score</th><th>Bonus</th><th class="your-col">Your deck</th></tr>
                 </thead>
                 <tbody id="guideBody"></tbody>
               </table>
@@ -185,6 +211,23 @@
           </section>
 
           <div class="notice" id="missingBox" hidden></div>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h3>Deck stats</h3>
+              <div class="chart-legend" id="chartLegend"></div>
+            </header>
+            <div class="charts">
+              <figure class="chart">
+                <figcaption>Mana curve <span>nonland cards by mana value</span></figcaption>
+                <div class="chart-body" id="curveChart"></div>
+              </figure>
+              <figure class="chart">
+                <figcaption>Card types <span>basic lands included</span></figcaption>
+                <div class="chart-body" id="typeChart"></div>
+              </figure>
+            </div>
+          </section>
 
           <section class="panel">
             <header class="panel-head">
@@ -289,6 +332,39 @@
     </div>
   </dialog>
 
+  <dialog class="card-modal share-modal" id="shareModal">
+    <button type="button" class="modal-close" id="shareClose" aria-label="Close">×</button>
+    <div class="share-body">
+      <div class="share-preview">
+        <img id="sharePreview" alt="Share image preview" />
+        <div class="share-rendering" id="shareRendering">Rendering…</div>
+      </div>
+      <div class="share-controls">
+        <h3>Share your score</h3>
+        <span class="field-label">Template</span>
+        <div class="segmented" role="radiogroup" aria-label="Template">
+          <label>
+            <input type="radio" name="shareTemplate" value="post" checked />
+            <span><strong>Post</strong><em>4:5 for feeds</em></span>
+          </label>
+          <label>
+            <input type="radio" name="shareTemplate" value="story" />
+            <span><strong>Story</strong><em>9:16 for stories</em></span>
+          </label>
+        </div>
+        <div class="share-actions">
+          <button type="button" class="btn btn-primary" id="downloadPng">Download image</button>
+          <button type="button" class="btn" id="downloadPdf">Download PDF</button>
+          <button type="button" class="btn" id="nativeShare" hidden>Share…</button>
+          <button type="button" class="btn btn-ghost" id="shareCopyLink">Copy link to results</button>
+        </div>
+        <p class="hint" id="shareHint">The link opens these exact results for anyone, no account needed.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="chart-tip" id="chartTip" hidden></div>
   <img class="hover-preview" id="hoverPreview" alt="" aria-hidden="true" />
   <div class="confetti-layer" id="confettiLayer" aria-hidden="true"></div>
   <script src="app.js" defer></script>
