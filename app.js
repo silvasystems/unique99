@@ -16,6 +16,7 @@
   const EDH_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
   const HISTORY_KEY = "u99-history-v1";
   const HISTORY_MAX = 24;
+  const SCORE_VERSION = 2;
   const SITE_URL = "unique99-github-io.vercel.app";
 
   // Score bands: label, ring colors.
@@ -592,14 +593,38 @@ Deck
     });
   }
 
+  // Second half of the bonus, from the deck's rounded average card score.
+  const AVERAGE_BONUS = [
+    { max: 10, bonus: -2 },
+    { max: 20, bonus: -1 },
+    { max: 30, bonus: 0 },
+    { max: 40, bonus: 2 },
+    { max: 60, bonus: 3 },
+    { max: 80, bonus: 5 },
+    { max: 100, bonus: 2 }
+  ];
+
+  function averageBonus(roundedAverage) {
+    return (AVERAGE_BONUS.find(step => roundedAverage <= step.max) || AVERAGE_BONUS[AVERAGE_BONUS.length - 1]).bonus;
+  }
+
+  // Deck score = rounded card average + (average bonus + category bonus).
   function scoreDeck(cards) {
     const average = cards.length ? cards.reduce((sum, card) => sum + card.points, 0) / cards.length : 0;
     const majority = majorityCategory(cards);
+    const avgBonus = averageBonus(Math.round(average));
+    const bonus = avgBonus + majority.bonus;
     return {
-      score: cards.length ? clampScore(Math.round(average) + majority.bonus) : 0,
+      score: cards.length ? clampScore(Math.round(average) + bonus) : 0,
       average,
-      majority
+      majority,
+      avgBonus,
+      bonus
     };
+  }
+
+  function signed(value) {
+    return value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : "0";
   }
 
   // ---------- Same-commander comparison (EDHREC) ----------
@@ -711,14 +736,6 @@ Deck
 
   function labelForScore(score) {
     return bandFor(score).name;
-  }
-
-  function verdictForScore(score) {
-    if (score <= 20) return "Efficient, powerful, and very familiar.";
-    if (score <= 40) return "Strong shell, but your staples are doing a lot of the talking.";
-    if (score <= 60) return "A healthy mix of staples and personal picks.";
-    if (score <= 80) return "This brew has real personality.";
-    return "Absolute deep-cut energy.";
   }
 
   function summaryForScore(score) {
@@ -906,7 +923,7 @@ Deck
   }
 
   function renderResults(result) {
-    const { cards, missing, commanders, fallbackCommanderName, basicsCount, edh, mode, modeNotice, delta, score, average, majority } = result;
+    const { cards, missing, commanders, fallbackCommanderName, basicsCount, edh, mode, modeNotice, delta, score, average, majority, avgBonus, bonus } = result;
     state.cards = cards;
     state.commanders = commanders;
     state.mode = mode;
@@ -963,7 +980,6 @@ Deck
       ring.style.strokeDashoffset = `${circumference * (1 - score / 100)}`;
     }));
     animateNumber($("scoreValue"), score);
-    $("verdictText").innerHTML = `<strong>U99 Verdict:</strong> ${escapeHtml(verdictForScore(score))}`;
     $("summaryText").textContent = summaryForScore(score);
 
     const deltaEl = $("scoreDelta");
@@ -977,14 +993,13 @@ Deck
       deltaEl.title = `Previous score: ${delta.prev}`;
     }
 
-    // Score equation: average + category bonus = score
+    // Score equation: card average + bonus = score
     const roundedAvg = Math.round(average);
-    const bonusText = majority.bonus > 0 ? `+${majority.bonus}` : majority.bonus < 0 ? `−${Math.abs(majority.bonus)}` : "+0";
-    const majorityCat = CATEGORY_BY_NAME[majority.category];
+    const bonusDetail = `${signed(avgBonus)} from the card average, ${signed(majority.bonus)} from ${majority.category}`;
     $("scoreEquation").innerHTML = `
       <span class="eq-term"><strong>${roundedAvg}</strong><em>Card avg</em></span>
-      <span class="eq-op">${majority.bonus < 0 ? "−" : "+"}</span>
-      <span class="eq-term ${majorityCat.cls}"><strong class="eq-bonus">${Math.abs(majority.bonus)}</strong><em>${majority.category}</em></span>
+      <span class="eq-op">${bonus < 0 ? "−" : "+"}</span>
+      <span class="eq-term eq-bonus-term" title="${escapeHtml(bonusDetail)}"><strong>${Math.abs(bonus)}</strong><em>Bonus</em></span>
       <span class="eq-op">=</span>
       <span class="eq-term eq-total"><strong>${score}</strong><em>Deck score</em></span>`;
 
@@ -1026,7 +1041,7 @@ Deck
     }
 
     $("stats").innerHTML = [
-      tile({ label: "Card score average", value: `${roundedAvg}`, unit: "/100", meter: average, cls: "accent", sub: `Bonus ${bonusText} from ${majority.category}` }),
+      tile({ label: "Card score average", value: `${roundedAvg}`, unit: "/100", meter: average, cls: "accent", sub: `Bonus ${signed(bonus)}: ${signed(avgBonus)} avg, ${signed(majority.bonus)} ${majority.category}` }),
       popularityTile,
       tile({ label: "Commander Staples", value: `${share("Commander Staples")}`, unit: "%", meter: share("Commander Staples"), cls: "cat-staples", sub: `${majority.counts["Commander Staples"]} of ${total} cards` }),
       tile({ label: "Unique Sleepers", value: `${share("Unique Sleepers")}`, unit: "%", meter: share("Unique Sleepers"), cls: "cat-sleepers", sub: `${majority.counts["Unique Sleepers"]} of ${total} cards` })
@@ -1106,13 +1121,11 @@ Deck
     $("guideBody").innerHTML = [...CATEGORIES].reverse().map(c => {
       const count = majority.counts[c.name];
       const isMajority = c.name === majority.category;
-      const bonus = c.bonus > 0 ? `+${c.bonus}` : c.bonus < 0 ? `−${Math.abs(c.bonus)}` : "0";
       return `
-        <tr class="guide-row ${c.cls} ${isMajority ? "majority" : ""}" data-category="${c.name}" tabindex="0">
+        <tr class="guide-row ${c.cls} ${isMajority ? "majority" : ""}">
           <td><span class="cat-tag"><i class="dot ${c.cls}"></i>${c.name}</span>${isMajority ? `<span class="majority-tag">Most common</span>` : ""}</td>
           <td>${ranges[c.name][0]}</td>
           <td>${ranges[c.name][1]}</td>
-          <td class="bonus">${bonus}</td>
           <td class="your-col">
             <span class="your-bar"><span style="width:${(count / maxCount) * 100}%"></span></span>
             <span class="your-num"><strong>${count}</strong><span class="pct"> · ${Math.round((count / total) * 100)}%</span></span>
@@ -1602,12 +1615,14 @@ Deck
     const id = hashString(`${deck}|${commanderInput}|${partnerInput}|${compareMode}`);
     const list = loadHistory();
 
-    const previous = list.find(item => item.id !== id && item.commander === commanderName && item.mode === mode);
+    // Only compare against scores made with the current formula (v2 added the average bonus).
+    const previous = list.find(item => item.id !== id && item.commander === commanderName && item.mode === mode && item.v === SCORE_VERSION);
     const delta = previous
       ? { diff: score - previous.score, prev: previous.score, when: timeAgo(previous.at) }
       : null;
 
     const entry = {
+      v: SCORE_VERSION,
       id,
       at: Date.now(),
       commander: commanderName,
@@ -2191,21 +2206,6 @@ Deck
     }
   } catch (error) { /* ignore */ }
 
-  function filterToCategory(row) {
-    const filter = $("categoryFilter");
-    filter.value = filter.value === row.dataset.category ? "All" : row.dataset.category;
-    renderReport();
-    $("reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  $("guideBody").addEventListener("click", event => {
-    const row = event.target.closest(".guide-row");
-    if (row) filterToCategory(row);
-  });
-  $("guideBody").addEventListener("keydown", event => {
-    const row = event.target.closest(".guide-row");
-    if (row && event.key === "Enter") filterToCategory(row);
-  });
 
   // Open the modal from any card in the results.
   els.results.addEventListener("click", event => {

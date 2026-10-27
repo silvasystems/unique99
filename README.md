@@ -38,7 +38,21 @@ Only cards that still can't be matched are listed as "not found."
 | Pet Cards           | 2,001–7,000 | 70–85      | +2         |
 | Unique Sleepers     | 7,001+      | 86–100     | +3         |
 
-Deck score = rounded average card score + the bonus for the most common category. Cards with no EDHREC rank score 100.
+Cards with no EDHREC rank score 100.
+
+**Deck score = rounded average card score + bonus**, where the bonus has two parts added together:
+
+| Average card score | Average bonus |     | Most common category | Category bonus |
+| ------------------ | ------------- | --- | -------------------- | -------------- |
+| 0–10               | −2            |     | Unique Sleepers      | +3             |
+| 11–20              | −1            |     | Pet Cards            | +2             |
+| 21–30              | 0             |     | Playables            | 0              |
+| 31–40              | +2            |     | Commander Favorites  | −1             |
+| 41–60              | +3            |     | Commander Staples    | −2             |
+| 61–80              | +5            |     |                      |                |
+| 81–100             | +2            |     |                      |                |
+
+For example, a 58 average with mostly Pet Cards gets +3 + 2 = +5, for a deck score of 63. Scores are capped at 1–100.
 
 **Same commander mode** scores each card by how often it appears in decks with your commander, using EDHREC's public commander data (`json.edhrec.com/pages/commanders/<slug>.json`, fetched straight from the browser). Partner pairs use the combined page.
 
@@ -77,6 +91,12 @@ npx http-server . -p 5199
 - Output directory: leave empty or `.`
 
 ## Changelog
+
+### v2.2 — two-part bonus, layout cleanup
+
+- Bonus now adds an average-card-score bonus to the category bonus.
+- Score card reordered: commander, score ring, label, description, equation (card avg + bonus = deck score), stats, share buttons, then a collapsible "How the score works". Removed the U99 Verdict.
+- Deck at a glance drops the bonus column, shows the same 4 columns on phones and desktop, and moves below the card strips. Deck stats moves below the full deck; Recent decks moves to the bottom of the page.
 
 ### v2.1 — same-commander scoring, sharing, history
 
